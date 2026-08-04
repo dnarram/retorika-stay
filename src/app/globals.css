@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Sistema de diseño — derivado de la identidad de Retorika Academy.
+   Azul #156fe7, azul profundo #105cb1, azul del logo #12517d, fucsia #ff3a72,
+   verde #03d26e, blanco #ffffff. El fucsia y el verde son SEMÁNTICOS
+   (urgencia / confirmación), nunca decorativos: así el color informa.
+--------------------------------------------------------------------------- */
+@theme {
+  --color-brand: #156fe7;
+  --color-brand-deep: #105cb1;
+  --color-brand-ink: #12517d;
+  --color-brand-soft: #eaf1fb;
+  --color-brand-line: #d6e4f5;
+
+  --color-alert: #ff3a72;
+  --color-alert-soft: #ffe9f0;
+  --color-alert-ink: #8c0f33;
+
+  --color-ok: #03d26e;
+  --color-ok-soft: #e3f8ed;
+  --color-ok-ink: #05603a;
+
+  --color-ink: #0b1b2b;
+  --color-muted: #5a6b7d;
+  --color-canvas: #f4f7fb;
+  --color-line: #e2eaf3;
+
+  --font-display: Outfit, "Segoe UI", system-ui, sans-serif;
+  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius-card: 16px;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Foco visible y consistente: requisito de accesibilidad, no decoración. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Salto al contenido para teclado y lectores de pantalla. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+  background: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* La guía se imprime: muchos anfitriones dejan una carpeta física en la casa. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .print-block {
+    break-inside: avoid;
+    border: 1px solid #ccc;
+  }
+}
+
+/* Leaflet: el contenedor necesita altura explícita y z-index contenido. */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  border-radius: 12px;
+  z-index: 0;
+  font-family: var(--font-sans);
+}

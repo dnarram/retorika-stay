@@ -1,0 +1,416 @@
+import type { Locale } from "@/lib/schema";
+
+/* ---------------------------------------------------------------------------
+   Diccionarios tipados sin librería de i18n: el proyecto necesita cuatro
+   idiomas y unas 90 claves. Añadir i18next serían 40 kB de JavaScript y una
+   capa de configuración para resolver algo que TypeScript ya resuelve — si
+   falta una clave en francés, el build falla.
+   Traducciones revisadas manualmente (ES nativo, EN/FR C1, PT B2).
+--------------------------------------------------------------------------- */
+
+const es = {
+  brand: "Retorika Stay",
+  tagline: "Todo lo de tu alojamiento, en un solo sitio",
+  langLabel: "Idioma",
+  sections: {
+    essentials: "Lo esencial",
+    house: "La casa",
+    rules: "Normas",
+    places: "Recomendaciones",
+    transport: "Cómo moverte",
+    emergency: "Emergencias",
+    checkout: "Salida",
+    faq: "Preguntas frecuentes",
+  },
+  quick: { wifi: "WiFi", access: "Entrada", help: "Ayuda", map: "Mapa" },
+  phase: {
+    antes: "Antes de llegar",
+    llegada: "Hoy llegas",
+    estancia: "Durante tu estancia",
+    salida: "Hoy te vas",
+    despues: "Estancia finalizada",
+  },
+  phaseHint: {
+    antes: "Guarda esta página: funciona sin conexión cuando aterrices.",
+    llegada: "Lo primero: dirección, entrada y WiFi.",
+    estancia: "Ideas para hoy y todo lo práctico de la casa.",
+    salida: "Repasa la salida antes de cerrar la puerta.",
+    despues: "Gracias por tu visita.",
+  },
+  labels: {
+    address: "Dirección",
+    network: "Red",
+    password: "Contraseña",
+    accessCode: "Código de acceso",
+    checkin: "Entrada desde",
+    checkout: "Salida antes de",
+    host: "Anfitrión",
+    nights: "noches",
+    parking: "Aparcamiento",
+    walk: "min a pie",
+    price: "Precio",
+    demo: "Demostración",
+  },
+  actions: {
+    copy: "Copiar",
+    copied: "Copiado",
+    reveal: "Mostrar código",
+    hide: "Ocultar",
+    directions: "Cómo llegar",
+    call: "Llamar",
+    website: "Web",
+    wifiQr: "QR de conexión",
+    scanToConnect: "Escanea para conectarte al WiFi",
+    print: "Imprimir guía",
+    search: "Buscar en la guía",
+    close: "Cerrar",
+    seeAll: "Ver todo",
+    offlineReady: "Guía disponible sin conexión",
+  },
+  categories: {
+    comer: "Restaurantes",
+    tapas: "Tapas",
+    cafe: "Café y desayuno",
+    ver: "Qué ver",
+    naturaleza: "Naturaleza",
+    compras: "Compras",
+    noche: "Noche",
+    servicios: "Servicios",
+  },
+  contacts: {
+    emergencias: "Emergencias (112)",
+    policia: "Policía local",
+    salud: "Centro de salud",
+    farmacia: "Farmacia",
+    taxi: "Taxi",
+    anfitrion: "Tu anfitrión",
+    averias: "Averías del edificio",
+  },
+  rules: { allowed: "Permitido", forbidden: "No permitido", note: "Ten en cuenta" },
+  accessLocked: "Disponible desde el día antes de tu llegada",
+  emergencyIntro: "El 112 atiende en español, inglés y francés desde cualquier móvil, aunque no tengas cobertura contratada.",
+  draftNotice: "Traducción automática pendiente de revisión.",
+  pin: {
+    title: "Esta guía está protegida",
+    body: "Introduce el PIN de 4 cifras que te envió tu anfitrión.",
+    submit: "Abrir guía",
+    error: "PIN incorrecto. Inténtalo de nuevo.",
+  },
+  emptyPlaces: "Tu anfitrión aún no ha añadido recomendaciones.",
+  noResults: "Sin resultados para esa búsqueda.",
+};
+
+export type Dict = typeof es;
+
+const en: Dict = {
+  brand: "Retorika Stay",
+  tagline: "Everything about your stay, in one place",
+  langLabel: "Language",
+  sections: {
+    essentials: "Essentials",
+    house: "The flat",
+    rules: "House rules",
+    places: "Recommendations",
+    transport: "Getting around",
+    emergency: "Emergencies",
+    checkout: "Check-out",
+    faq: "FAQ",
+  },
+  quick: { wifi: "WiFi", access: "Entry", help: "Help", map: "Map" },
+  phase: {
+    antes: "Before you arrive",
+    llegada: "You arrive today",
+    estancia: "During your stay",
+    salida: "You leave today",
+    despues: "Stay completed",
+  },
+  phaseHint: {
+    antes: "Save this page: it works offline once you land.",
+    llegada: "First things first: address, entry and WiFi.",
+    estancia: "Ideas for today plus everything practical.",
+    salida: "Run through check-out before you close the door.",
+    despues: "Thanks for staying with us.",
+  },
+  labels: {
+    address: "Address",
+    network: "Network",
+    password: "Password",
+    accessCode: "Access code",
+    checkin: "Check-in from",
+    checkout: "Check-out before",
+    host: "Host",
+    nights: "nights",
+    parking: "Parking",
+    walk: "min walk",
+    price: "Price",
+    demo: "Demo",
+  },
+  actions: {
+    copy: "Copy",
+    copied: "Copied",
+    reveal: "Show code",
+    hide: "Hide",
+    directions: "Directions",
+    call: "Call",
+    website: "Website",
+    wifiQr: "WiFi QR code",
+    scanToConnect: "Scan to join the WiFi",
+    print: "Print guide",
+    search: "Search the guide",
+    close: "Close",
+    seeAll: "See all",
+    offlineReady: "Guide available offline",
+  },
+  categories: {
+    comer: "Restaurants",
+    tapas: "Tapas",
+    cafe: "Coffee and breakfast",
+    ver: "Things to see",
+    naturaleza: "Outdoors",
+    compras: "Shopping",
+    noche: "Nightlife",
+    servicios: "Services",
+  },
+  contacts: {
+    emergencias: "Emergencies (112)",
+    policia: "Local police",
+    salud: "Health centre",
+    farmacia: "Pharmacy",
+    taxi: "Taxi",
+    anfitrion: "Your host",
+    averias: "Building maintenance",
+  },
+  rules: { allowed: "Allowed", forbidden: "Not allowed", note: "Please note" },
+  accessLocked: "Available from the day before you arrive",
+  emergencyIntro: "112 answers in English, Spanish and French from any mobile, even without an active plan.",
+  draftNotice: "Machine translation, not yet reviewed.",
+  pin: {
+    title: "This guide is protected",
+    body: "Enter the 4-digit PIN your host sent you.",
+    submit: "Open guide",
+    error: "Wrong PIN. Try again.",
+  },
+  emptyPlaces: "Your host hasn't added recommendations yet.",
+  noResults: "Nothing matches that search.",
+};
+
+const fr: Dict = {
+  brand: "Retorika Stay",
+  tagline: "Tout sur votre séjour, au même endroit",
+  langLabel: "Langue",
+  sections: {
+    essentials: "L'essentiel",
+    house: "Le logement",
+    rules: "Règles",
+    places: "Recommandations",
+    transport: "Se déplacer",
+    emergency: "Urgences",
+    checkout: "Départ",
+    faq: "Questions fréquentes",
+  },
+  quick: { wifi: "WiFi", access: "Entrée", help: "Aide", map: "Carte" },
+  phase: {
+    antes: "Avant votre arrivée",
+    llegada: "Vous arrivez aujourd'hui",
+    estancia: "Pendant votre séjour",
+    salida: "Vous partez aujourd'hui",
+    despues: "Séjour terminé",
+  },
+  phaseHint: {
+    antes: "Gardez cette page : elle fonctionne hors connexion.",
+    llegada: "D'abord : adresse, entrée et WiFi.",
+    estancia: "Des idées pour aujourd'hui et tout le pratique.",
+    salida: "Relisez le départ avant de fermer la porte.",
+    despues: "Merci de votre visite.",
+  },
+  labels: {
+    address: "Adresse",
+    network: "Réseau",
+    password: "Mot de passe",
+    accessCode: "Code d'accès",
+    checkin: "Arrivée à partir de",
+    checkout: "Départ avant",
+    host: "Hôte",
+    nights: "nuits",
+    parking: "Stationnement",
+    walk: "min à pied",
+    price: "Prix",
+    demo: "Démo",
+  },
+  actions: {
+    copy: "Copier",
+    copied: "Copié",
+    reveal: "Afficher le code",
+    hide: "Masquer",
+    directions: "Itinéraire",
+    call: "Appeler",
+    website: "Site web",
+    wifiQr: "QR code WiFi",
+    scanToConnect: "Scannez pour vous connecter au WiFi",
+    print: "Imprimer le guide",
+    search: "Rechercher dans le guide",
+    close: "Fermer",
+    seeAll: "Tout voir",
+    offlineReady: "Guide disponible hors connexion",
+  },
+  categories: {
+    comer: "Restaurants",
+    tapas: "Tapas",
+    cafe: "Café et petit-déjeuner",
+    ver: "À voir",
+    naturaleza: "Nature",
+    compras: "Boutiques",
+    noche: "Sorties",
+    servicios: "Services",
+  },
+  contacts: {
+    emergencias: "Urgences (112)",
+    policia: "Police locale",
+    salud: "Centre de santé",
+    farmacia: "Pharmacie",
+    taxi: "Taxi",
+    anfitrion: "Votre hôte",
+    averias: "Dépannage de l'immeuble",
+  },
+  rules: { allowed: "Autorisé", forbidden: "Interdit", note: "À noter" },
+  accessLocked: "Disponible à partir de la veille de votre arrivée",
+  emergencyIntro: "Le 112 répond en français, espagnol et anglais depuis n'importe quel mobile, même sans forfait actif.",
+  draftNotice: "Traduction automatique en attente de relecture.",
+  pin: {
+    title: "Ce guide est protégé",
+    body: "Saisissez le code à 4 chiffres envoyé par votre hôte.",
+    submit: "Ouvrir le guide",
+    error: "Code incorrect. Réessayez.",
+  },
+  emptyPlaces: "Votre hôte n'a pas encore ajouté de recommandations.",
+  noResults: "Aucun résultat pour cette recherche.",
+};
+
+const pt: Dict = {
+  brand: "Retorika Stay",
+  tagline: "Tudo sobre a sua estadia, num só lugar",
+  langLabel: "Idioma",
+  sections: {
+    essentials: "O essencial",
+    house: "A casa",
+    rules: "Regras",
+    places: "Recomendações",
+    transport: "Como circular",
+    emergency: "Emergências",
+    checkout: "Saída",
+    faq: "Perguntas frequentes",
+  },
+  quick: { wifi: "WiFi", access: "Entrada", help: "Ajuda", map: "Mapa" },
+  phase: {
+    antes: "Antes de chegar",
+    llegada: "Chega hoje",
+    estancia: "Durante a estadia",
+    salida: "Sai hoje",
+    despues: "Estadia terminada",
+  },
+  phaseHint: {
+    antes: "Guarde esta página: funciona sem ligação.",
+    llegada: "Primeiro: morada, entrada e WiFi.",
+    estancia: "Ideias para hoje e tudo o que é prático.",
+    salida: "Reveja a saída antes de fechar a porta.",
+    despues: "Obrigado pela visita.",
+  },
+  labels: {
+    address: "Morada",
+    network: "Rede",
+    password: "Palavra-passe",
+    accessCode: "Código de acesso",
+    checkin: "Entrada a partir das",
+    checkout: "Saída antes das",
+    host: "Anfitrião",
+    nights: "noites",
+    parking: "Estacionamento",
+    walk: "min a pé",
+    price: "Preço",
+    demo: "Demonstração",
+  },
+  actions: {
+    copy: "Copiar",
+    copied: "Copiado",
+    reveal: "Mostrar código",
+    hide: "Ocultar",
+    directions: "Como chegar",
+    call: "Ligar",
+    website: "Site",
+    wifiQr: "QR do WiFi",
+    scanToConnect: "Digitalize para ligar ao WiFi",
+    print: "Imprimir guia",
+    search: "Pesquisar no guia",
+    close: "Fechar",
+    seeAll: "Ver tudo",
+    offlineReady: "Guia disponível sem ligação",
+  },
+  categories: {
+    comer: "Restaurantes",
+    tapas: "Petiscos",
+    cafe: "Café e pequeno-almoço",
+    ver: "O que ver",
+    naturaleza: "Natureza",
+    compras: "Compras",
+    noche: "Noite",
+    servicios: "Serviços",
+  },
+  contacts: {
+    emergencias: "Emergências (112)",
+    policia: "Polícia local",
+    salud: "Centro de saúde",
+    farmacia: "Farmácia",
+    taxi: "Táxi",
+    anfitrion: "O seu anfitrião",
+    averias: "Avarias do edifício",
+  },
+  rules: { allowed: "Permitido", forbidden: "Não permitido", note: "Atenção" },
+  accessLocked: "Disponível a partir da véspera da chegada",
+  emergencyIntro: "O 112 atende em português, espanhol e inglês a partir de qualquer telemóvel, mesmo sem plano ativo.",
+  draftNotice: "Tradução automática por rever.",
+  pin: {
+    title: "Este guia está protegido",
+    body: "Introduza o PIN de 4 dígitos que o anfitrião lhe enviou.",
+    submit: "Abrir guia",
+    error: "PIN incorreto. Tente de novo.",
+  },
+  emptyPlaces: "O anfitrião ainda não adicionou recomendações.",
+  noResults: "Sem resultados para essa pesquisa.",
+};
+
+export const dictionaries: Record<Locale, Dict> = { es, en, fr, pt };
+
+export const LOCALE_NAMES: Record<Locale, string> = {
+  es: "Español",
+  en: "English",
+  fr: "Français",
+  pt: "Português",
+};
+
+export function getDictionary(locale: Locale): Dict {
+  return dictionaries[locale] ?? dictionaries.es;
+}
+
+/* Negociación de idioma: el parámetro de la URL manda (un huésped puede
+   compartir el enlace ya traducido), después la cabecera del navegador. */
+export function resolveLocale(
+  requested: string | undefined | null,
+  acceptLanguage: string | null,
+  fallback: Locale,
+): Locale {
+  const supported = Object.keys(dictionaries) as Locale[];
+  if (requested && supported.includes(requested as Locale)) return requested as Locale;
+  if (acceptLanguage) {
+    const preferred = acceptLanguage
+      .split(",")
+      .map((part) => {
+        const [tag, q] = part.trim().split(";q=");
+        return { tag: tag.slice(0, 2).toLowerCase(), q: q ? Number(q) : 1 };
+      })
+      .sort((a, b) => b.q - a.q);
+    for (const { tag } of preferred) {
+      if (supported.includes(tag as Locale)) return tag as Locale;
+    }
+  }
+  return fallback;
+}

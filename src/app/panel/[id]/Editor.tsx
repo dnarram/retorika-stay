@@ -1,0 +1,865 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { IconArrow, IconCheck, IconCross, IconInfo, IconQr, IconTrash } from "./editor-icons";
+import type { GuideRecord } from "@/data/seed";
+import { LOCALE_NAMES } from "@/i18n/dictionaries";
+import type { Check } from "@/lib/completeness";
+import { completeness } from "@/lib/completeness";
+import {
+  LOCALES,
+  PLACE_CATEGORIES,
+  type Guide,
+  type Locale,
+  type Place,
+  type PlaceCategory,
+  type Property,
+} from "@/lib/schema";
+
+const STEPS = [
+  "Datos del alojamiento",
+  "Entrada y WiFi",
+  "Cómo funciona la casa",
+  "Normas",
+  "Recomendaciones",
+  "Moverse y emergencias",
+  "Salida, idiomas y publicación",
+] as const;
+
+type SaveState = "idle" | "saving" | "saved" | "error";
+
+export default function Editor({
+  property: initialProperty,
+  guides: initialGuides,
+  places: initialPlaces,
+  checks,
+  mode,
+}: {
+  property: Property;
+  guides: GuideRecord[];
+  places: Place[];
+  initialScore: number;
+  checks: Check[];
+  mode: "postgres" | "demo";
+}) {
+  const [property, setProperty] = useState(initialProperty);
+  const [guides, setGuides] = useState(initialGuides);
+  const [places, setPlaces] = useState(initialPlaces);
+  const [locale, setLocale] = useState<Locale>(initialProperty.defaultLocale);
+  const [step, setStep] = useState(1);
+  const [save, setSave] = useState<SaveState>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const guide = useMemo(
+    () => guides.find((g) => g.locale === locale) ?? guides[0],
+    [guides, locale],
+  );
+
+  const progress = useMemo(
+    () => completeness(property, guides, places),
+    [property, guides, places],
+  );
+
+  /* Autoguardado con rebote: escribir no debe disparar una petición por tecla,
+     pero tampoco quiero un botón de guardar que el anfitrión olvide pulsar. */
+  const persist = useCallback(
+    (nextProperty: Property, nextGuide: GuideRecord | undefined) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(async () => {
+        setSave("saving");
+        try {
+          const calls: Promise<Response>[] = [
+            fetch(`/api/properties/${nextProperty.id}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                name: nextProperty.name,
+                city: nextProperty.city,
+                address: nextProperty.address,
+                lat: nextProperty.lat,
+                lng: nextProperty.lng,
+                hostName: nextProperty.hostName,
+                hostPhone: nextProperty.hostPhone,
+                wifiSsid: nextProperty.wifiSsid,
+                wifiPassword: nextProperty.wifiPassword,
+                wifiSecurity: nextProperty.wifiSecurity,
+                accessCode: nextProperty.accessCode,
+                checkinFrom: nextProperty.checkinFrom,
+                checkoutUntil: nextProperty.checkoutUntil,
+                contacts: nextProperty.contacts,
+                published: nextProperty.published,
+                pin: nextProperty.pin,
+              }),
+            }),
+          ];
+          if (nextGuide) {
+            calls.push(
+              fetch(`/api/guides/${nextProperty.id}/${nextGuide.locale}`, {
+                method: "PUT",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ content: nextGuide.content, reviewed: true }),
+              }),
+            );
+          }
+          const results = await Promise.all(calls);
+          setSave(results.every((r) => r.ok) ? "saved" : "error");
+        } catch {
+          setSave("error");
+        }
+      }, 900);
+    },
+    [],
+  );
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  const patchProperty = (patch: Partial<Property>) => {
+    const next = { ...property, ...patch };
+    setProperty(next);
+    persist(next, guide);
+  };
+
+  const patchGuide = (patch: Partial<Guide>) => {
+    if (!guide) return;
+    const nextGuide: GuideRecord = { ...guide, reviewed: true, content: { ...guide.content, ...patch } };
+    const nextGuides = guides.map((g) => (g.locale === nextGuide.locale ? nextGuide : g));
+    setGuides(nextGuides);
+    persist(property, nextGuide);
+  };
+
+  async function savePlace(place: Place) {
+    setPlaces((current) => current.map((p) => (p.id === place.id ? place : p)));
+    await fetch("/api/places", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        propertyId: property.id,
+        id: place.id,
+        place: { ...place, id: undefined, propertyId: undefined },
+      }),
+    });
+  }
+
+  async function addPlace() {
+    const response = await fetch("/api/places", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        propertyId: property.id,
+        place: {
+          category: "comer" as PlaceCategory,
+          name: "Sitio nuevo",
+          lat: property.lat,
+          lng: property.lng,
+          price: null,
+          url: null,
+          phone: null,
+          notes: { [locale]: { tagline: "", note: "" } },
+        },
+      }),
+    });
+    if (response.ok) {
+      const { place } = (await response.json()) as { place: Place };
+      setPlaces((current) => [...current, place]);
+    }
+  }
+
+  async function removePlace(id: string) {
+    setPlaces((current) => current.filter((p) => p.id !== id));
+    await fetch(`/api/places/${id}`, { method: "DELETE" });
+  }
+
+  async function translate(to: Locale) {
+    setMessage(`Traduciendo al ${LOCALE_NAMES[to]}…`);
+    const response = await fetch("/api/translate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ propertyId: property.id, from: property.defaultLocale, to }),
+    });
+    const payload = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      setMessage(payload.error ?? "No se pudo traducir.");
+      return;
+    }
+    setMessage(`Traducido al ${LOCALE_NAMES[to]}. Queda marcado como borrador hasta que lo repases.`);
+    window.location.reload();
+  }
+
+  const guideUrl =
+    typeof window === "undefined" ? "" : `${window.location.origin}/g/${property.slug}`;
+
+  return (
+    <div className="mx-auto max-w-5xl px-5 py-8">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Link href="/panel" className="text-sm text-muted hover:text-brand-deep">
+            ← Tus alojamientos
+          </Link>
+          <h1 className="mt-1 font-display text-2xl font-semibold">{property.name}</h1>
+          <p className="text-sm text-muted">
+            {property.city} · paso {step} de {STEPS.length}
+          </p>
+        </div>
+        <div className="text-right text-sm">
+          <p className="font-medium">{progress.score}% completada</p>
+          <p className="text-muted">
+            {save === "saving" ? "Guardando…" : null}
+            {save === "saved" ? "Cambios guardados" : null}
+            {save === "error" ? "No se pudo guardar" : null}
+            {save === "idle" ? "Autoguardado activo" : null}
+          </p>
+        </div>
+      </header>
+
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-brand-soft">
+        <div className="h-full bg-brand transition-all" style={{ width: `${progress.score}%` }} />
+      </div>
+
+      {mode === "demo" ? (
+        <p className="mt-4 flex items-start gap-2 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand-ink">
+          <IconInfo size={18} /> Modo demostración: los cambios viven en memoria hasta que reinicies
+          el servidor.
+        </p>
+      ) : null}
+
+      <nav className="mt-6 flex gap-2 overflow-x-auto pb-2" aria-label="Pasos">
+        {STEPS.map((label, index) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => setStep(index + 1)}
+            aria-current={step === index + 1 ? "step" : undefined}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium ${
+              step === index + 1 ? "bg-brand text-white" : "bg-white text-muted ring-1 ring-line"
+            }`}
+          >
+            {index + 1}. {label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_260px]">
+        <section className="space-y-5">
+          {step === 1 ? (
+            <Panel title="Datos del alojamiento">
+              <Field label="Nombre" value={property.name} onChange={(v) => patchProperty({ name: v })} />
+              <Field label="Ciudad" value={property.city} onChange={(v) => patchProperty({ city: v })} />
+              <Field label="Dirección" value={property.address} onChange={(v) => patchProperty({ address: v })} />
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  label="Latitud"
+                  value={String(property.lat)}
+                  onChange={(v) => patchProperty({ lat: Number(v) || property.lat })}
+                  hint="De estas coordenadas salen el mapa y los minutos a pie."
+                />
+                <Field
+                  label="Longitud"
+                  value={String(property.lng)}
+                  onChange={(v) => patchProperty({ lng: Number(v) || property.lng })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Entrada desde" value={property.checkinFrom} onChange={(v) => patchProperty({ checkinFrom: v })} />
+                <Field label="Salida antes de" value={property.checkoutUntil} onChange={(v) => patchProperty({ checkoutUntil: v })} />
+              </div>
+              <Area
+                label="Bienvenida"
+                value={guide?.content.welcomeIntro ?? ""}
+                onChange={(v) => patchGuide({ welcomeIntro: v })}
+                hint="Dos o tres frases honestas: lo bueno y lo que conviene saber antes de llegar."
+              />
+            </Panel>
+          ) : null}
+
+          {step === 2 ? (
+            <>
+              <Panel title="Entrada">
+                <Field
+                  label="Código de acceso"
+                  value={property.accessCode}
+                  onChange={(v) => patchProperty({ accessCode: v })}
+                  hint="Solo se envía al navegador del huésped durante su estancia."
+                />
+                <ListEditor
+                  label="Pasos para entrar"
+                  items={guide?.content.arrivalSteps ?? []}
+                  onChange={(arrivalSteps) => patchGuide({ arrivalSteps })}
+                  placeholder="Ej.: la caja de llaves es la gris, a la izquierda del portal."
+                />
+                <Area label="Aparcamiento" value={guide?.content.parking ?? ""} onChange={(v) => patchGuide({ parking: v })} />
+              </Panel>
+              <Panel title="WiFi">
+                <Field label="Red" value={property.wifiSsid} onChange={(v) => patchProperty({ wifiSsid: v })} />
+                <Field label="Contraseña" value={property.wifiPassword} onChange={(v) => patchProperty({ wifiPassword: v })} />
+                <Area label="Nota sobre la cobertura" value={guide?.content.wifiNote ?? ""} onChange={(v) => patchGuide({ wifiNote: v })} />
+              </Panel>
+            </>
+          ) : null}
+
+          {step === 3 ? (
+            <Panel title="Cómo funciona la casa">
+              <PairEditor
+                items={guide?.content.house ?? []}
+                onChange={(house) => patchGuide({ house })}
+                titleLabel="Elemento"
+                bodyLabel="Instrucciones"
+                hint="Agua caliente, climatización, lavadora y basuras evitan la mayoría de los mensajes."
+              />
+            </Panel>
+          ) : null}
+
+          {step === 4 ? (
+            <Panel title="Normas">
+              <ul className="space-y-3">
+                {(guide?.content.rules ?? []).map((rule, index) => (
+                  <li key={index} className="rounded-xl border border-line p-3">
+                    <textarea
+                      value={rule.text}
+                      rows={2}
+                      onChange={(event) => {
+                        const rules = [...(guide?.content.rules ?? [])];
+                        rules[index] = { ...rule, text: event.target.value };
+                        patchGuide({ rules });
+                      }}
+                      className="w-full resize-none rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-brand"
+                    />
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {[
+                        { value: true, label: "Permitido" },
+                        { value: false, label: "Prohibido" },
+                        { value: null, label: "Matiz" },
+                      ].map((option) => (
+                        <button
+                          key={String(option.value)}
+                          type="button"
+                          onClick={() => {
+                            const rules = [...(guide?.content.rules ?? [])];
+                            rules[index] = { ...rule, allowed: option.value };
+                            patchGuide({ rules });
+                          }}
+                          className={`rounded-full px-3 py-1 text-xs font-medium ${
+                            rule.allowed === option.value
+                              ? "bg-brand text-white"
+                              : "ring-1 ring-line text-muted"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          patchGuide({ rules: (guide?.content.rules ?? []).filter((_, i) => i !== index) })
+                        }
+                        className="ml-auto text-muted hover:text-alert-ink"
+                        aria-label="Eliminar norma"
+                      >
+                        <IconTrash size={16} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() =>
+                  patchGuide({ rules: [...(guide?.content.rules ?? []), { text: "", allowed: null }] })
+                }
+                className="mt-3 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
+              >
+                Añadir norma
+              </button>
+            </Panel>
+          ) : null}
+
+          {step === 5 ? (
+            <Panel title="Recomendaciones">
+              <p className="text-sm text-muted">
+                Las distancias y los minutos a pie se calculan solos desde las coordenadas. Lo que no
+                se puede calcular es tu nota personal: eso es lo que hace útil la lista.
+              </p>
+              <ul className="mt-4 space-y-4">
+                {places.map((place) => (
+                  <li key={place.id} className="rounded-xl border border-line p-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Nombre" value={place.name} onChange={(v) => savePlace({ ...place, name: v })} />
+                      <label className="block text-sm">
+                        <span className="font-medium">Categoría</span>
+                        <select
+                          value={place.category}
+                          onChange={(event) =>
+                            savePlace({ ...place, category: event.target.value as PlaceCategory })
+                          }
+                          className="mt-1 w-full rounded-xl border border-line px-3 py-2 outline-none focus:border-brand"
+                        >
+                          {PLACE_CATEGORIES.map((category) => (
+                            <option key={category} value={category}>
+                              {category}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <Field label="Latitud" value={String(place.lat)} onChange={(v) => savePlace({ ...place, lat: Number(v) || place.lat })} />
+                      <Field label="Longitud" value={String(place.lng)} onChange={(v) => savePlace({ ...place, lng: Number(v) || place.lng })} />
+                    </div>
+                    <Field
+                      label={`Titular (${locale})`}
+                      value={place.notes[locale]?.tagline ?? ""}
+                      onChange={(v) =>
+                        savePlace({
+                          ...place,
+                          notes: {
+                            ...place.notes,
+                            [locale]: { tagline: v, note: place.notes[locale]?.note ?? "" },
+                          },
+                        })
+                      }
+                    />
+                    <Area
+                      label={`Tu nota (${locale})`}
+                      value={place.notes[locale]?.note ?? ""}
+                      onChange={(v) =>
+                        savePlace({
+                          ...place,
+                          notes: {
+                            ...place.notes,
+                            [locale]: { tagline: place.notes[locale]?.tagline ?? "", note: v },
+                          },
+                        })
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePlace(place.id)}
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted hover:text-alert-ink"
+                    >
+                      <IconTrash size={16} /> Eliminar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={addPlace}
+                className="mt-4 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white"
+              >
+                Añadir sitio
+              </button>
+            </Panel>
+          ) : null}
+
+          {step === 6 ? (
+            <>
+              <Panel title="Cómo moverse">
+                <PairEditor
+                  items={guide?.content.transport ?? []}
+                  onChange={(transport) => patchGuide({ transport })}
+                  titleLabel="Medio"
+                  bodyLabel="Detalle"
+                  hint="Incluye siempre la llegada desde el aeropuerto o la estación."
+                />
+              </Panel>
+              <Panel title="Emergencias">
+                <p className="text-sm text-muted">
+                  El 112 aparece siempre. Añade tu teléfono, una farmacia y el centro de salud más
+                  cercano.
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {property.contacts.map((contact, index) => (
+                    <li key={index} className="grid gap-2 sm:grid-cols-[130px_1fr_1fr_auto]">
+                      <select
+                        value={contact.kind}
+                        onChange={(event) => {
+                          const contacts = [...property.contacts];
+                          contacts[index] = { ...contact, kind: event.target.value as typeof contact.kind };
+                          patchProperty({ contacts });
+                        }}
+                        className="rounded-xl border border-line px-3 py-2 text-sm"
+                      >
+                        {["emergencias", "policia", "salud", "farmacia", "taxi", "anfitrion", "averias"].map((kind) => (
+                          <option key={kind} value={kind}>
+                            {kind}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={contact.phone}
+                        onChange={(event) => {
+                          const contacts = [...property.contacts];
+                          contacts[index] = { ...contact, phone: event.target.value };
+                          patchProperty({ contacts });
+                        }}
+                        className="rounded-xl border border-line px-3 py-2 text-sm"
+                      />
+                      <input
+                        value={contact.detail ?? ""}
+                        placeholder="Detalle"
+                        onChange={(event) => {
+                          const contacts = [...property.contacts];
+                          contacts[index] = { ...contact, detail: event.target.value };
+                          patchProperty({ contacts });
+                        }}
+                        className="rounded-xl border border-line px-3 py-2 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          patchProperty({ contacts: property.contacts.filter((_, i) => i !== index) })
+                        }
+                        aria-label="Eliminar contacto"
+                        className="text-muted hover:text-alert-ink"
+                      >
+                        <IconTrash size={16} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() =>
+                    patchProperty({ contacts: [...property.contacts, { kind: "anfitrion", phone: "" }] })
+                  }
+                  className="mt-3 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
+                >
+                  Añadir contacto
+                </button>
+              </Panel>
+            </>
+          ) : null}
+
+          {step === 7 ? (
+            <>
+              <Panel title="Salida">
+                <ListEditor
+                  label="Pasos de salida"
+                  items={guide?.content.checkoutSteps ?? []}
+                  onChange={(checkoutSteps) => patchGuide({ checkoutSteps })}
+                  placeholder="Ej.: deja las llaves dentro de la caja y gira la rueda."
+                />
+              </Panel>
+
+              <Panel title="Idiomas">
+                <p className="text-sm text-muted">
+                  El huésped ve la guía en el idioma de su navegador. Lo traducido entra como
+                  borrador y se marca en la guía hasta que lo repasas.
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {LOCALES.map((code) => {
+                    const record = guides.find((g) => g.locale === code);
+                    return (
+                      <li key={code} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3 py-2">
+                        <span className="text-sm font-medium">{LOCALE_NAMES[code]}</span>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                              !record
+                                ? "bg-alert-soft text-alert-ink"
+                                : record.reviewed
+                                  ? "bg-ok-soft text-ok-ink"
+                                  : "bg-alert-soft text-alert-ink"
+                            }`}
+                          >
+                            {record ? (record.reviewed ? <IconCheck size={13} /> : <IconCross size={13} />) : <IconCross size={13} />}
+                            {!record ? "Sin traducir" : record.reviewed ? "Revisada" : "Borrador"}
+                          </span>
+                          {code === property.defaultLocale ? (
+                            <span className="text-xs text-muted">original</span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => translate(code)}
+                                className="rounded-full px-3 py-1 text-xs font-medium ring-1 ring-line"
+                              >
+                                Traducir
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setLocale(code)}
+                                className="rounded-full px-3 py-1 text-xs font-medium ring-1 ring-line"
+                              >
+                                Revisar
+                              </button>
+                            </>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {message ? <p className="mt-3 text-sm text-brand-deep">{message}</p> : null}
+                <p className="mt-3 text-sm text-muted">
+                  Editando ahora: <strong>{LOCALE_NAMES[locale]}</strong>
+                </p>
+              </Panel>
+
+              <Panel title="Publicación">
+                <label className="flex items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={property.published}
+                    onChange={(event) => patchProperty({ published: event.target.checked })}
+                    className="h-5 w-5 accent-[var(--color-brand)]"
+                  />
+                  Guía publicada y accesible por enlace
+                </label>
+                <Field
+                  label="PIN de acceso (opcional)"
+                  value={property.pin ?? ""}
+                  onChange={(v) => patchProperty({ pin: /^\d{4}$/.test(v) ? v : v === "" ? null : property.pin })}
+                  hint="Cuatro cifras. Con PIN, ni siquiera quien tenga el enlace ve el contenido."
+                />
+                <div className="mt-4 flex flex-wrap items-center gap-4">
+                  {guideUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={`/api/qr?size=200&data=${encodeURIComponent(guideUrl)}`}
+                      alt="Código QR de la guía"
+                      width={140}
+                      height={140}
+                      className="rounded-xl border border-line bg-white p-2"
+                    />
+                  ) : null}
+                  <div className="text-sm">
+                    <p className="font-mono text-xs text-brand-deep">{guideUrl}</p>
+                    <p className="mt-2 text-muted">
+                      Imprime el QR y déjalo en la nevera. El enlace no está indexado en buscadores.
+                    </p>
+                    <a
+                      href={`/api/qr?size=600&data=${encodeURIComponent(guideUrl)}`}
+                      download={`qr-${property.slug}.svg`}
+                      className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 font-medium text-white"
+                    >
+                      <IconQr size={16} /> Descargar QR
+                    </a>
+                  </div>
+                </div>
+              </Panel>
+            </>
+          ) : null}
+
+          <div className="flex justify-between pt-2">
+            <button
+              type="button"
+              onClick={() => setStep((s) => Math.max(1, s - 1))}
+              disabled={step === 1}
+              className="rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep((s) => Math.min(STEPS.length, s + 1))}
+              disabled={step === STEPS.length}
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Siguiente <IconArrow size={16} />
+            </button>
+          </div>
+        </section>
+
+        <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">
+          <div className="rounded-card border border-line bg-white p-4">
+            <p className="text-sm font-medium">Qué falta</p>
+            <ul className="mt-3 space-y-2 text-sm">
+              {progress.checks.map((check) => (
+                <li key={check.key}>
+                  <button
+                    type="button"
+                    onClick={() => setStep(check.step)}
+                    className="flex w-full items-start gap-2 text-left"
+                  >
+                    <span className={check.done ? "text-ok-ink" : "text-muted"}>
+                      {check.done ? <IconCheck size={16} /> : <IconCross size={16} />}
+                    </span>
+                    <span className={check.done ? "text-muted line-through" : ""}>{check.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <Link
+            href={`/g/${property.slug}`}
+            className="block rounded-card border border-line bg-white p-4 text-sm font-medium text-brand-deep hover:border-brand"
+          >
+            Ver la guía como huésped →
+          </Link>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------- piezas de formulario -------------------------- */
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-card border border-line bg-white p-5">
+      <h2 className="font-display text-lg font-semibold">{title}</h2>
+      <div className="mt-4 space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint?: string;
+}) {
+  return (
+    <label className="block text-sm">
+      <span className="font-medium">{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded-xl border border-line px-3 py-2 outline-none focus:border-brand"
+      />
+      {hint ? <span className="mt-1 block text-xs text-muted">{hint}</span> : null}
+    </label>
+  );
+}
+
+function Area({
+  label,
+  value,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint?: string;
+}) {
+  return (
+    <label className="block text-sm">
+      <span className="font-medium">{label}</span>
+      <textarea
+        value={value}
+        rows={3}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded-xl border border-line px-3 py-2 outline-none focus:border-brand"
+      />
+      {hint ? <span className="mt-1 block text-xs text-muted">{hint}</span> : null}
+    </label>
+  );
+}
+
+function ListEditor({
+  label,
+  items,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="text-sm">
+      <p className="font-medium">{label}</p>
+      <ul className="mt-2 space-y-2">
+        {items.map((item, index) => (
+          <li key={index} className="flex gap-2">
+            <span className="mt-2 text-xs text-muted">{index + 1}</span>
+            <textarea
+              value={item}
+              rows={2}
+              placeholder={placeholder}
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = event.target.value;
+                onChange(next);
+              }}
+              className="w-full rounded-xl border border-line px-3 py-2 outline-none focus:border-brand"
+            />
+            <button
+              type="button"
+              onClick={() => onChange(items.filter((_, i) => i !== index))}
+              aria-label="Eliminar"
+              className="text-muted hover:text-alert-ink"
+            >
+              <IconTrash size={16} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={() => onChange([...items, ""])}
+        className="mt-2 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
+      >
+        Añadir
+      </button>
+    </div>
+  );
+}
+
+function PairEditor({
+  items,
+  onChange,
+  titleLabel,
+  bodyLabel,
+  hint,
+}: {
+  items: { title: string; body: string }[];
+  onChange: (items: { title: string; body: string }[]) => void;
+  titleLabel: string;
+  bodyLabel: string;
+  hint?: string;
+}) {
+  return (
+    <div className="text-sm">
+      {hint ? <p className="text-muted">{hint}</p> : null}
+      <ul className="mt-3 space-y-3">
+        {items.map((item, index) => (
+          <li key={index} className="rounded-xl border border-line p-3">
+            <input
+              value={item.title}
+              placeholder={titleLabel}
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...item, title: event.target.value };
+                onChange(next);
+              }}
+              className="w-full rounded-lg border border-line px-3 py-2 font-medium outline-none focus:border-brand"
+            />
+            <textarea
+              value={item.body}
+              rows={2}
+              placeholder={bodyLabel}
+              onChange={(event) => {
+                const next = [...items];
+                next[index] = { ...item, body: event.target.value };
+                onChange(next);
+              }}
+              className="mt-2 w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand"
+            />
+            <button
+              type="button"
+              onClick={() => onChange(items.filter((_, i) => i !== index))}
+              className="mt-2 inline-flex items-center gap-1.5 text-muted hover:text-alert-ink"
+            >
+              <IconTrash size={16} /> Eliminar
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={() => onChange([...items, { title: "", body: "" }])}
+        className="mt-3 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
+      >
+        Añadir
+      </button>
+    </div>
+  );
+}

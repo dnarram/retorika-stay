@@ -1,0 +1,36 @@
+{
+  "name": "retorika-stay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Guia digital para huespedes de alojamientos turisticos - prueba tecnica Retorika Academy",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "smoke": "bash scripts/smoke.sh",
+    "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
+    "db:seed": "node --experimental-strip-types scripts/seed.ts"
+  },
+  "dependencies": {
+    "next": "15.5.4",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "postgres": "3.4.7",
+    "zod": "3.25.76",
+    "jose": "5.9.6",
+    "nanoid": "5.1.5",
+    "qrcode": "1.5.4",
+    "leaflet": "1.9.4"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "@types/react": "19.1.9",
+    "@types/react-dom": "19.1.7",
+    "@types/leaflet": "1.9.20",
+    "@types/qrcode": "1.5.5",
+    "typescript": "5.8.3",
+    "tailwindcss": "4.1.11",
+    "@tailwindcss/postcss": "4.1.11"
+  }
+}
