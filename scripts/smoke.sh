@@ -4,27 +4,53 @@
 set -u
 PORT=${PORT:-3311}
 BASE="http://localhost:$PORT"
+J='content-type: application/json'
 
 npx next start -p "$PORT" > /tmp/retorika-smoke.log 2>&1 &
 SERVER=$!
 trap 'kill $SERVER 2>/dev/null' EXIT
 sleep 8
 
-check() { printf '%-46s %s\n' "$1" "$2"; }
+check() { printf '%-52s %s\n' "$1" "$2"; }
+code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 
-check "home"                      "$(curl -s -o /dev/null -w '%{http_code}' $BASE/)"
-check "guia publica"              "$(curl -s -o /dev/null -w '%{http_code}' $BASE/g/k3f9apx2)"
-check "codigo de acceso si fase=antes (0)"  "$(curl -s "$BASE/g/k3f9apx2?fase=antes" | grep -c 4718)"
-check "guia en frances"           "$(curl -s "$BASE/g/k3f9apx2?lang=fr" | grep -c 'Bienvenue')"
-check "PIN incorrecto (401)"      "$(curl -s -o /dev/null -w '%{http_code}' -X POST $BASE/api/guide/m7q2ldv5/unlock -H 'content-type: application/json' -d '{"pin":"1111"}')"
-check "PIN correcto (200)"        "$(curl -s -c /tmp/pin.txt -o /dev/null -w '%{http_code}' -X POST $BASE/api/guide/m7q2ldv5/unlock -H 'content-type: application/json' -d '{"pin":"2610"}')"
-check "PATCH sin sesion (401)"    "$(curl -s -o /dev/null -w '%{http_code}' -X PATCH $BASE/api/properties/prop_ronda -H 'content-type: application/json' -d '{"name":"x"}')"
-check "login clave mala (401)"    "$(curl -s -o /dev/null -w '%{http_code}' -X POST $BASE/api/auth/login -H 'content-type: application/json' -d '{"email":"belen@retorika.es","password":"malaclave"}')"
-check "login correcto (200)"      "$(curl -s -c /tmp/host.txt -o /dev/null -w '%{http_code}' -X POST $BASE/api/auth/login -H 'content-type: application/json' -d '{"email":"belen@retorika.es","password":"retorika2026"}')"
-check "PATCH valido (200)"        "$(curl -s -b /tmp/host.txt -o /dev/null -w '%{http_code}' -X PATCH $BASE/api/properties/prop_ronda -H 'content-type: application/json' -d '{"checkinFrom":"15:00"}')"
-check "PATCH lat=999 (422)"       "$(curl -s -b /tmp/host.txt -o /dev/null -w '%{http_code}' -X PATCH $BASE/api/properties/prop_ronda -H 'content-type: application/json' -d '{"lat":999}')"
-check "traducir sin clave (501)"  "$(curl -s -b /tmp/host.txt -o /dev/null -w '%{http_code}' -X POST $BASE/api/translate -H 'content-type: application/json' -d '{"propertyId":"prop_ronda","from":"es","to":"fr"}')"
-check "cabecera noindex"          "$(curl -sI $BASE/g/k3f9apx2 | grep -ci 'x-robots-tag')"
-printf '%-46s ' "limite de intentos del PIN"
-for _ in 1 2 3 4 5 6; do curl -s -o /dev/null -w '%{http_code} ' -X POST $BASE/api/guide/k3f9apx2/unlock -H 'content-type: application/json' -d '{"pin":"0000"}'; done
+echo "── acceso público ──────────────────────────────────────────────"
+check "portada"                          "$(code $BASE/)"
+check "enlace de muestra del alojamiento" "$(code $BASE/g/k3f9apx2)"
+check "enlace de la estancia en curso"    "$(code $BASE/g/r7d3ka92)"
+
+echo "── el código de entrada y el WiFi solo en su ventana ───────────"
+check "muestra: código 4718 en el HTML (0)"        "$(curl -s $BASE/g/k3f9apx2 | grep -c 4718)"
+check "muestra: clave WiFi en el HTML (0)"         "$(curl -s $BASE/g/k3f9apx2 | grep -c 'tajo-2026-ronda')"
+check "estancia en curso: código presente (1)"     "$(curl -s $BASE/g/r7d3ka92 | grep -c 4718)"
+check "estancia terminada: código 9042 (0)"        "$(curl -s $BASE/g/mv8ktp41 | grep -c 9042)"
+check "estancia terminada: clave WiFi (0)"         "$(curl -s $BASE/g/mv8ktp41 | grep -c 'lavapies-atico-04')"
+check "estancia futura con PIN: sin contenido (0)"  "$(curl -s $BASE/g/r5xw81nq | grep -c 4718)"
+
+echo "── idioma y fases ─────────────────────────────────────────────"
+check "guía en francés"                  "$(curl -s "$BASE/g/r7d3ka92?lang=fr" | grep -c 'Bienvenue')"
+check "fase recuerdo con resumen"        "$(curl -s "$BASE/g/r7d3ka92?fase=recuerdo" | grep -c 'Tu viaje')"
+
+echo "── sesión y autorización ──────────────────────────────────────"
+check "PATCH sin sesión (401)"           "$(code -X PATCH $BASE/api/properties/prop_ronda -H "$J" -d '{"name":"x"}')"
+check "crear alojamiento sin sesión (401)" "$(code -X POST $BASE/api/properties -H "$J" -d '{"name":"x","city":"y","address":"zzzz","lat":1,"lng":1}')"
+check "crear reserva sin sesión (401)"   "$(code -X POST $BASE/api/stays -H "$J" -d '{}')"
+check "login clave mala (401)"           "$(code -X POST $BASE/api/auth/login -H "$J" -d '{"email":"belen@retorika.es","password":"malaclave"}')"
+check "login correcto (200)"             "$(code -c /tmp/host.txt -X POST $BASE/api/auth/login -H "$J" -d '{"email":"belen@retorika.es","password":"retorika2026"}')"
+check "portada con sesión redirige (307)" "$(code -b /tmp/host.txt $BASE/)"
+check "PATCH válido (200)"               "$(code -b /tmp/host.txt -X PATCH $BASE/api/properties/prop_ronda -H "$J" -d '{"checkinFrom":"15:00"}')"
+check "PATCH lat=999 (422)"              "$(code -b /tmp/host.txt -X PATCH $BASE/api/properties/prop_ronda -H "$J" -d '{"lat":999}')"
+check "registro con clave corta (422)"   "$(code -X POST $BASE/api/auth/register -H "$J" -d '{"name":"Ana","email":"a@b.es","password":"corta"}')"
+check "registro correo repetido (409)"   "$(code -X POST $BASE/api/auth/register -H "$J" -d '{"name":"Ana","email":"belen@retorika.es","password":"clavelarga1"}')"
+check "reserva con salida anterior (422)" "$(code -b /tmp/host.txt -X POST $BASE/api/stays -H "$J" -d '{"propertyId":"prop_ronda","stay":{"guestName":"X","arrival":"2026-09-10","departure":"2026-09-01","accessCodeOverride":null,"pin":null}}')"
+
+echo "── servicios ──────────────────────────────────────────────────"
+check "asistente sin clave (501)"        "$(code -b /tmp/host.txt -X POST $BASE/api/assist -H "$J" -d '{"task":"pasos","input":"caja de llaves gris"}')"
+check "traducir sin clave (501)"         "$(code -b /tmp/host.txt -X POST $BASE/api/translate -H "$J" -d '{"propertyId":"prop_ronda","from":"es","to":"fr"}')"
+check "métrica anónima (204)"            "$(code -X POST $BASE/api/track -H "$J" -d '{"slug":"k3f9apx2","kind":"apertura","value":""}')"
+check "métrica con tipo inventado (400)" "$(code -X POST $BASE/api/track -H "$J" -d '{"slug":"k3f9apx2","kind":"espiar","value":""}')"
+check "cabecera noindex"                 "$(curl -sI $BASE/g/k3f9apx2 | grep -ci 'x-robots-tag')"
+
+printf '%-52s ' "límite de intentos del PIN"
+for _ in 1 2 3 4 5 6; do code -X POST $BASE/api/guide/k3f9apx2/unlock -H "$J" -d '{"pin":"0000"}'; printf ' '; done
 echo

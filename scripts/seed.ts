@@ -1,6 +1,6 @@
 /* Carga los datos de demostración. Uso: npm run db:seed */
 import postgres from "postgres";
-import { GUIDES, HOSTS, PLACES, PROPERTIES } from "../src/data/seed.ts";
+import { GUIDES, HOSTS, PLACES, PROPERTIES, STAYS } from "../src/data/seed.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -20,12 +20,19 @@ await sql.begin(async (tx) => {
   for (const p of PROPERTIES) {
     await tx`insert into properties (id, host_id, slug, name, city, address, lat, lng, host_name,
               host_phone, wifi_ssid, wifi_password, wifi_security, access_code, checkin_from,
-              checkout_until, stay_from, stay_to, contacts, default_locale, published, pin)
+              checkout_until, contacts, default_locale, published, pin)
              values (${p.id}, ${p.hostId}, ${p.slug}, ${p.name}, ${p.city}, ${p.address}, ${p.lat},
               ${p.lng}, ${p.hostName}, ${p.hostPhone}, ${p.wifiSsid}, ${p.wifiPassword},
               ${p.wifiSecurity}, ${p.accessCode}, ${p.checkinFrom}, ${p.checkoutUntil},
-              ${p.stayFrom}, ${p.stayTo}, ${tx.json(p.contacts)}, ${p.defaultLocale},
+              ${tx.json(p.contacts)}, ${p.defaultLocale},
               ${p.published}, ${p.pin})
+             on conflict (id) do nothing`;
+  }
+
+  for (const stay of STAYS) {
+    await tx`insert into stays (id, property_id, slug, guest_name, arrival, departure, pin)
+             values (${stay.id}, ${stay.propertyId}, ${stay.slug}, ${stay.guestName},
+              ${stay.arrival}, ${stay.departure}, ${stay.pin})
              on conflict (id) do nothing`;
   }
 
@@ -43,5 +50,5 @@ await sql.begin(async (tx) => {
   }
 });
 
-console.log(`Sembrados ${PROPERTIES.length} alojamientos, ${GUIDES.length} guías y ${PLACES.length} sitios.`);
+console.log(`Sembrados ${PROPERTIES.length} alojamientos, ${STAYS.length} estancias, ${GUIDES.length} guías y ${PLACES.length} sitios.`);
 await sql.end();

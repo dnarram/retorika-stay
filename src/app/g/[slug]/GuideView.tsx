@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   IconAlert,
@@ -24,15 +24,24 @@ import { LOCALE_NAMES, getDictionary } from "@/i18n/dictionaries";
 import type { ContactKind, Guide, Locale, Place, PlaceCategory } from "@/lib/schema";
 import type { StayPhase } from "@/lib/stay";
 import { wifiQrPayload } from "@/lib/wifi";
+import Keepsake from "./Keepsake";
 
 const PlacesMap = dynamic(() => import("./PlacesMap"), {
   ssr: false,
   loading: () => <div className="h-72 animate-pulse rounded-xl bg-brand-soft" />,
 });
 
-export type GuestPlace = Place & { walkMin: number; distance: string; directions: string };
+export type GuestPlace = Place & {
+  walkMin: number;
+  distance: string;
+  meters: number;
+  directions: string;
+};
 
 export type GuestPayload = {
+  audience: "estancia" | "muestra";
+  stay: { guestName: string | null; arrival: string; departure: string; nights: number } | null;
+  autoTranslated: boolean;
   property: {
     slug: string;
     name: string;
@@ -43,7 +52,7 @@ export type GuestPayload = {
     hostName: string;
     hostPhone: string;
     wifiSsid: string;
-    wifiPassword: string;
+    wifiPassword: string | null;
     wifiSecurity: "WPA" | "WEP" | "nopass";
     checkinFrom: string;
     checkoutUntil: string;
@@ -52,7 +61,6 @@ export type GuestPayload = {
     directions: string;
   };
   guide: Guide;
-  reviewed: boolean;
   locale: Locale;
   phase: StayPhase;
   demoPhase: boolean;
@@ -73,13 +81,39 @@ type SectionId =
    sección desaparece nunca: se reordena. Ocultar información a un huésped que
    no encuentra el contenedor de la basura es peor que hacerle bajar dos
    pantallas. */
+const SECTION_LABEL: Record<SectionId, keyof ReturnType<typeof getDictionary>["sections"]> = {
+  esencial: "essentials",
+  casa: "house",
+  normas: "rules",
+  sitios: "places",
+  moverse: "transport",
+  emergencias: "emergency",
+  salida: "checkout",
+  faq: "faq",
+};
+
 const ORDER: Record<StayPhase, SectionId[]> = {
   antes: ["esencial", "moverse", "normas", "sitios", "casa", "emergencias", "salida", "faq"],
   llegada: ["esencial", "casa", "normas", "sitios", "moverse", "emergencias", "salida", "faq"],
   estancia: ["sitios", "casa", "esencial", "moverse", "normas", "emergencias", "salida", "faq"],
   salida: ["salida", "esencial", "sitios", "moverse", "emergencias", "casa", "normas", "faq"],
-  despues: ["salida", "faq", "sitios", "esencial", "moverse", "casa", "normas", "emergencias"],
+  recuerdo: ["sitios", "faq", "moverse", "esencial", "casa", "normas", "emergencias", "salida"],
 };
+
+/* Un beacon que no bloquea la navegación y que se pierde sin consecuencias si
+   el huésped está sin conexión: la métrica nunca puede estorbar a la guía. */
+function track(slug: string, kind: string, value = "") {
+  const body = JSON.stringify({ slug, kind, value });
+  try {
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon("/api/track", new Blob([body], { type: "application/json" }));
+      return;
+    }
+    void fetch("/api/track", { method: "POST", body, keepalive: true });
+  } catch {
+    /* sin conexión: no pasa nada */
+  }
+}
 
 export default function GuideView({ data }: { data: GuestPayload }) {
   const t = getDictionary(data.locale);
@@ -90,6 +124,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   const [showWifiQr, setShowWifiQr] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [done, setDone] = useState<number[]>([]);
+  const [visited, setVisited] = useState<string[]>([]);
+  const [noPrint, setNoPrint] = useState<SectionId[]>([]);
 
   /* Registro del service worker: la guía se guarda en el móvil al primer
      acceso, que es justo cuando el huésped todavía tiene wifi del aeropuerto. */
@@ -102,12 +138,60 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   useEffect(() => {
     const saved = localStorage.getItem(`checkout_${property.slug}`);
     if (saved) setDone(JSON.parse(saved) as number[]);
+    const seen = localStorage.getItem(`visited_${property.slug}`);
+    if (seen) setVisited(JSON.parse(seen) as string[]);
   }, [property.slug]);
+
+  /* Analítica sin analítica: dos contadores agregados por alojamiento, sin
+     cookies, sin identificador de dispositivo y sin preguntarle nada al
+     huésped. Al anfitrión le dicen en qué idiomas llegan sus huéspedes; a
+     nosotros, nada sobre ninguna persona concreta. */
+  useEffect(() => {
+    track(property.slug, "apertura");
+    track(property.slug, "idioma", data.locale);
+  }, [property.slug, data.locale]);
+
+  /* Lo que se busca y no aparece es la métrica más útil de todas: le dice al
+     anfitrión qué falta en su guía, con las palabras del huésped. */
+  useEffect(() => {
+    if (!needleRef.current) return;
+    const timer = setTimeout(() => {
+      if (visiblePlaces.length === 0 && visibleFaqs.length === 0) {
+        track(property.slug, "busqueda_sin_resultado", needleRef.current);
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const toggleStep = (index: number) => {
     const next = done.includes(index) ? done.filter((i) => i !== index) : [...done, index];
     setDone(next);
     localStorage.setItem(`checkout_${property.slug}`, JSON.stringify(next));
+  };
+
+  const toggleVisited = (id: string) => {
+    const next = visited.includes(id) ? visited.filter((v) => v !== id) : [...visited, id];
+    setVisited(next);
+    localStorage.setItem(`visited_${property.slug}`, JSON.stringify(next));
+  };
+
+  const share = async () => {
+    const url = window.location.href;
+    const text = `${guide.welcomeTitle} — ${property.city}`;
+    /* navigator.share abre el propio menú del móvil: WhatsApp, SMS, correo o lo
+       que el huésped tenga. Cero backend, cero proveedor de email, cero coste. */
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: text, url });
+        return;
+      } catch {
+        /* el usuario canceló: no es un error */
+      }
+    }
+    await navigator.clipboard.writeText(url).catch(() => {});
+    setCopied("share");
+    setTimeout(() => setCopied(null), 2000);
   };
 
   const copy = async (value: string, key: string) => {
@@ -121,6 +205,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   };
 
   const needle = query.trim().toLowerCase();
+  const needleRef = useRef(needle);
+  needleRef.current = needle;
   const visiblePlaces = useMemo(
     () =>
       places.filter((place) => {
@@ -141,6 +227,18 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     [guide.faqs, needle],
   );
 
+  const visitedPlaces = useMemo(
+    () => places.filter((place) => visited.includes(place.id)),
+    [places, visited],
+  );
+
+  /* Kilómetros aproximados: ida y vuelta a cada sitio marcado. Es una
+     estimación y no pretende ser otra cosa. */
+  const kmWalked = useMemo(
+    () => (visitedPlaces.reduce((sum, place) => sum + place.meters * 2, 0) / 1000).toFixed(1),
+    [visitedPlaces],
+  );
+
   const categories = useMemo(
     () => Array.from(new Set(places.map((p) => p.category))),
     [places],
@@ -149,7 +247,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   const wifiQr = `/api/qr?size=320&data=${encodeURIComponent(
     wifiQrPayload({
       ssid: property.wifiSsid,
-      password: property.wifiPassword,
+      password: property.wifiPassword ?? "",
       security: property.wifiSecurity,
     }),
   )}`;
@@ -237,13 +335,21 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             </div>
             <div className="flex items-center justify-between gap-3">
               <dt className="text-muted">{t.labels.password}</dt>
-              <dd className="font-mono">{property.wifiPassword}</dd>
+              <dd className="font-mono">
+                {property.wifiPassword ?? <span className="text-muted">••••••••</span>}
+              </dd>
             </div>
           </dl>
-          <div className="mt-4 flex flex-wrap gap-2 no-print">
+          {!property.wifiPassword ? (
+            <p className="mt-3 flex items-center gap-2 text-sm text-muted">
+              <IconInfo size={16} />
+              {data.audience === "muestra" ? t.showcase : t.expired}
+            </p>
+          ) : null}
+          <div className={property.wifiPassword ? "mt-4 flex flex-wrap gap-2 no-print" : "hidden"}>
             <button
               type="button"
-              onClick={() => copy(property.wifiPassword, "wifi")}
+              onClick={() => copy(property.wifiPassword ?? "", "wifi")}
               className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-brand-line"
             >
               {copied === "wifi" ? <IconCheck size={16} /> : <IconCopy size={16} />}
@@ -385,6 +491,21 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                       <IconGlobe size={14} /> {t.actions.website}
                     </a>
                   ) : null}
+                  {/* El "visitado" vive solo en el móvil del huésped. Nadie
+                      más lo ve, y es lo que alimenta el resumen del viaje. */}
+                  <button
+                    type="button"
+                    onClick={() => toggleVisited(place.id)}
+                    aria-pressed={visited.includes(place.id)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium ${
+                      visited.includes(place.id)
+                        ? "bg-ok-soft text-ok-ink"
+                        : "ring-1 ring-brand-line text-muted"
+                    }`}
+                  >
+                    <IconCheck size={14} />
+                    {visited.includes(place.id) ? t.visited : t.markVisited}
+                  </button>
                 </div>
               </li>
             );
@@ -427,6 +548,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 </div>
                 <a
                   href={`tel:${contact.phone}`}
+                  onClick={() => track(property.slug, "llamada", contact.kind)}
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${
                     contact.kind === "emergencias"
                       ? "bg-alert text-white"
@@ -514,9 +636,15 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </header>
 
       <main id="contenido" className="mx-auto max-w-2xl px-5">
-        {!data.reviewed ? (
-          <p className="mt-4 flex items-center gap-2 rounded-xl bg-alert-soft px-4 py-3 text-sm text-alert-ink">
-            <IconInfo size={16} /> {t.draftNotice}
+        {data.audience === "muestra" ? (
+          <p className="mt-4 flex items-start gap-2 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand-ink">
+            <IconInfo size={16} /> {t.showcase}
+          </p>
+        ) : null}
+
+        {data.audience === "estancia" && data.phase === "recuerdo" ? (
+          <p className="mt-4 flex items-start gap-2 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand-ink">
+            <IconInfo size={16} /> {t.expired}
           </p>
         ) : null}
 
@@ -536,21 +664,95 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           />
         </div>
 
-        {ORDER[data.phase].map((id) => sections[id])}
+        {data.phase === "recuerdo" && data.stay ? (
+          <section className="mt-8 rounded-card bg-brand-ink p-6 text-white">
+            <h2 className="font-display text-lg font-semibold">{t.phase.recuerdo}</h2>
+            <p className="mt-1 text-sm text-white/70">{t.phaseHint.recuerdo}</p>
+            <dl className="mt-5 grid grid-cols-3 gap-3 text-center">
+              {[
+                { value: String(visitedPlaces.length), label: t.tripPlaces },
+                { value: String(data.stay.nights), label: t.tripNights },
+                { value: kmWalked, label: t.tripWalk },
+              ].map((stat) => (
+                <div key={stat.label} className="rounded-xl bg-white/10 py-3">
+                  <dt className="font-display text-2xl font-semibold">{stat.value}</dt>
+                  <dd className="text-[11px] text-white/70">{stat.label}</dd>
+                </div>
+              ))}
+            </dl>
+            <Keepsake
+              title={guide.welcomeTitle}
+              city={property.city}
+              label={t.tripCard}
+              hint={t.tripCardHint}
+              stats={[
+                { value: String(visitedPlaces.length), label: t.tripPlaces },
+                { value: String(data.stay.nights), label: t.tripNights },
+                { value: kmWalked, label: t.tripWalk },
+              ]}
+            />
+          </section>
+        ) : null}
+
+        {ORDER[data.phase].map((id) => (
+          <div key={id} className={noPrint.includes(id) ? "print-hidden" : undefined}>
+            {sections[id]}
+          </div>
+        ))}
 
         {data.demoPhase ? <PhasePreview locale={data.locale} phase={data.phase} /> : null}
 
-        <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5 text-xs text-muted">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 font-medium ring-1 ring-brand-line no-print"
-          >
-            <IconPrint size={14} /> {t.actions.print}
-          </button>
-          <span className="inline-flex items-center gap-1.5">
-            <IconCheck size={14} /> {t.actions.offlineReady}
-          </span>
+        <footer className="mt-10 border-t border-line pt-5 text-xs text-muted">
+          <details className="no-print rounded-card border border-line bg-white p-4 text-sm text-ink">
+            <summary className="cursor-pointer list-none font-medium">
+              <span className="flex items-center gap-2">
+                <IconPrint size={16} /> {t.printPick}
+              </span>
+            </summary>
+            {/* Imprimir la guía entera es útil para la carpeta de la casa;
+                imprimir solo tres secciones es lo que de verdad hace un huésped
+                que se lleva un papel en el bolsillo. */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ORDER[data.phase].map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={!noPrint.includes(id)}
+                  onClick={() =>
+                    setNoPrint((current) =>
+                      current.includes(id) ? current.filter((s) => s !== id) : [...current, id],
+                    )
+                  }
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                    noPrint.includes(id) ? "text-muted ring-1 ring-line" : "bg-brand text-white"
+                  }`}
+                >
+                  {t.sections[SECTION_LABEL[id]]}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white"
+            >
+              <IconPrint size={16} /> {t.actions.print}
+            </button>
+          </details>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={share}
+              className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 font-medium ring-1 ring-brand-line no-print"
+            >
+              <IconArrow size={14} /> {copied === "share" ? t.actions.copied : t.share}
+            </button>
+            <span className="inline-flex items-center gap-1.5">
+              <IconCheck size={14} /> {t.actions.offlineReady}
+            </span>
+          </div>
+          {data.autoTranslated ? <p className="mt-3">{t.autoTranslated}</p> : null}
         </footer>
       </main>
     </div>

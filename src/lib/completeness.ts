@@ -21,8 +21,6 @@ export function completeness(
   places: Place[],
 ): { score: number; checks: Check[]; pending: Check[] } {
   const base = guides.find((g) => g.locale === property.defaultLocale)?.content;
-  const reviewedLocales = guides.filter((g) => g.reviewed).length;
-
   const checks: Check[] = [
     {
       key: "address",
@@ -98,10 +96,13 @@ export function completeness(
     },
     {
       key: "i18n",
-      label: "Idiomas revisados",
+      label: "Idiomas disponibles",
       weight: 2,
-      done: reviewedLocales === LOCALES.length,
-      hint: "Repasa las traducciones marcadas como borrador antes de publicarlas.",
+      /* No se le pide al anfitrión que "revise" el francés: si no lo habla, es
+         una tarea imposible y solo le ensucia el panel. Basta con que la
+         traducción exista; la guía avisa al huésped de que es automática. */
+      done: guides.length === LOCALES.length,
+      hint: "Al publicar se generan los cuatro idiomas automáticamente.",
       step: 7,
     },
   ];

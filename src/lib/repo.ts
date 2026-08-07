@@ -1,6 +1,6 @@
-import { GUIDES, HOSTS, PLACES, PROPERTIES, type GuideRecord } from "@/data/seed";
+import { GUIDES, HOSTS, PLACES, PROPERTIES, STAYS, type GuideRecord } from "@/data/seed";
 import { getSql, hasDatabase } from "./db";
-import type { Guide, Locale, Place, Property } from "./schema";
+import type { Guide, Locale, MetricKind, Place, Property, Stay } from "./schema";
 
 /* ---------------------------------------------------------------------------
    Un único contrato de datos con dos implementaciones:
@@ -23,6 +23,15 @@ export interface Repo {
   getProperty(id: string): Promise<Property | null>;
   getPropertyBySlug(slug: string): Promise<Property | null>;
   updateProperty(id: string, patch: Partial<Property>): Promise<Property | null>;
+  createProperty(property: Property): Promise<Property>;
+  deleteProperty(id: string): Promise<void>;
+  listStays(propertyId: string): Promise<Stay[]>;
+  getStayBySlug(slug: string): Promise<Stay | null>;
+  saveStay(stay: Stay): Promise<void>;
+  deleteStay(id: string): Promise<void>;
+  createHost(host: Host): Promise<void>;
+  track(propertyId: string, kind: MetricKind, value: string): Promise<void>;
+  metrics(propertyId: string): Promise<{ kind: MetricKind; value: string; count: number }[]>;
   getGuide(propertyId: string, locale: Locale): Promise<GuideRecord | null>;
   listGuides(propertyId: string): Promise<GuideRecord[]>;
   saveGuide(propertyId: string, locale: Locale, content: Guide, reviewed: boolean): Promise<void>;
@@ -40,6 +49,8 @@ const memory = {
   properties: clone(PROPERTIES),
   guides: clone(GUIDES),
   places: clone(PLACES),
+  stays: clone(STAYS),
+  metrics: [] as { propertyId: string; kind: MetricKind; value: string; count: number }[],
 };
 
 const demoRepo: Repo = {
@@ -61,6 +72,48 @@ const demoRepo: Repo = {
     if (index < 0) return null;
     memory.properties[index] = { ...memory.properties[index], ...patch };
     return memory.properties[index];
+  },
+  async createProperty(property) {
+    memory.properties.push(property);
+    return property;
+  },
+  async deleteProperty(id) {
+    memory.properties = memory.properties.filter((p) => p.id !== id);
+    memory.guides = memory.guides.filter((g) => g.propertyId !== id);
+    memory.places = memory.places.filter((p) => p.propertyId !== id);
+    memory.stays = memory.stays.filter((s) => s.propertyId !== id);
+  },
+  async listStays(propertyId) {
+    return memory.stays
+      .filter((s) => s.propertyId === propertyId)
+      .sort((a, b) => b.arrival.localeCompare(a.arrival));
+  },
+  async getStayBySlug(slug) {
+    return memory.stays.find((s) => s.slug === slug) ?? null;
+  },
+  async saveStay(stay) {
+    const index = memory.stays.findIndex((s) => s.id === stay.id);
+    if (index < 0) memory.stays.push(stay);
+    else memory.stays[index] = stay;
+  },
+  async deleteStay(id) {
+    memory.stays = memory.stays.filter((s) => s.id !== id);
+  },
+  async createHost(host) {
+    memory.hosts.push(host);
+  },
+  async track(propertyId, kind, value) {
+    const row = memory.metrics.find(
+      (m) => m.propertyId === propertyId && m.kind === kind && m.value === value,
+    );
+    if (row) row.count += 1;
+    else memory.metrics.push({ propertyId, kind, value, count: 1 });
+  },
+  async metrics(propertyId) {
+    return memory.metrics
+      .filter((m) => m.propertyId === propertyId)
+      .map(({ kind, value, count }) => ({ kind, value, count }))
+      .sort((a, b) => b.count - a.count);
   },
   async getGuide(propertyId, locale) {
     return memory.guides.find((g) => g.propertyId === propertyId && g.locale === locale) ?? null;
@@ -106,8 +159,7 @@ type PropertyRow = {
   access_code: string;
   checkin_from: string;
   checkout_until: string;
-  stay_from: string | null;
-  stay_to: string | null;
+  access_code_updated_at: string | null;
   contacts: Property["contacts"];
   default_locale: Locale;
   published: boolean;
@@ -131,8 +183,7 @@ const toProperty = (row: PropertyRow): Property => ({
   accessCode: row.access_code,
   checkinFrom: row.checkin_from.slice(0, 5),
   checkoutUntil: row.checkout_until.slice(0, 5),
-  stayFrom: row.stay_from ? String(row.stay_from).slice(0, 10) : null,
-  stayTo: row.stay_to ? String(row.stay_to).slice(0, 10) : null,
+  accessCodeUpdatedAt: row.access_code_updated_at ? String(row.access_code_updated_at) : null,
   contacts: row.contacts ?? [],
   defaultLocale: row.default_locale,
   published: row.published,
@@ -155,13 +206,34 @@ const COLUMN: Record<string, string> = {
   accessCode: "access_code",
   checkinFrom: "checkin_from",
   checkoutUntil: "checkout_until",
-  stayFrom: "stay_from",
-  stayTo: "stay_to",
+  accessCodeUpdatedAt: "access_code_updated_at",
   contacts: "contacts",
   defaultLocale: "default_locale",
   published: "published",
   pin: "pin",
 };
+
+const toStay = (row: {
+  id: string;
+  property_id: string;
+  slug: string;
+  guest_name: string | null;
+  arrival: string;
+  departure: string;
+  access_code_override: string | null;
+  pin: string | null;
+  revoked: boolean;
+}): Stay => ({
+  id: row.id,
+  propertyId: row.property_id,
+  slug: row.slug,
+  guestName: row.guest_name,
+  arrival: String(row.arrival).slice(0, 10),
+  departure: String(row.departure).slice(0, 10),
+  accessCodeOverride: row.access_code_override,
+  pin: row.pin,
+  revoked: row.revoked,
+});
 
 const pgRepo: Repo = {
   mode: "postgres",
@@ -202,6 +274,87 @@ const pgRepo: Repo = {
     );
     await sql`update properties set ${merged}, updated_at = now() where id = ${id}`;
     return this.getProperty(id);
+  },
+  async createProperty(property) {
+    const sql = getSql();
+    await sql`
+      insert into properties (id, host_id, slug, name, city, address, lat, lng, host_name,
+        host_phone, wifi_ssid, wifi_password, wifi_security, access_code, checkin_from,
+        checkout_until, contacts, default_locale, published, pin)
+      values (${property.id}, ${property.hostId}, ${property.slug}, ${property.name},
+        ${property.city}, ${property.address}, ${property.lat}, ${property.lng},
+        ${property.hostName}, ${property.hostPhone}, ${property.wifiSsid},
+        ${property.wifiPassword}, ${property.wifiSecurity}, ${property.accessCode},
+        ${property.checkinFrom}, ${property.checkoutUntil}, ${sql.json(property.contacts as never)},
+        ${property.defaultLocale}, ${property.published}, ${property.pin})`;
+    return property;
+  },
+  async deleteProperty(id) {
+    /* Las guías, los sitios y las estancias caen con el alojamiento por la
+       cláusula on delete cascade del esquema: una sola sentencia. */
+    const sql = getSql();
+    await sql`delete from properties where id = ${id}`;
+  },
+  async listStays(propertyId) {
+    const sql = getSql();
+    const rows = await sql<
+      {
+        id: string;
+        property_id: string;
+        slug: string;
+        guest_name: string | null;
+        arrival: string;
+        departure: string;
+        access_code_override: string | null;
+        pin: string | null;
+        revoked: boolean;
+      }[]
+    >`select * from stays where property_id = ${propertyId} order by arrival desc`;
+    return rows.map(toStay);
+  },
+  async getStayBySlug(slug) {
+    const sql = getSql();
+    const rows = await sql`select * from stays where slug = ${slug} limit 1`;
+    return rows[0] ? toStay(rows[0] as never) : null;
+  },
+  async saveStay(stay) {
+    const sql = getSql();
+    await sql`
+      insert into stays (id, property_id, slug, guest_name, arrival, departure,
+        access_code_override, pin, revoked)
+      values (${stay.id}, ${stay.propertyId}, ${stay.slug}, ${stay.guestName}, ${stay.arrival},
+        ${stay.departure}, ${stay.accessCodeOverride}, ${stay.pin}, ${stay.revoked})
+      on conflict (id) do update set
+        guest_name = excluded.guest_name, arrival = excluded.arrival,
+        departure = excluded.departure, access_code_override = excluded.access_code_override,
+        pin = excluded.pin, revoked = excluded.revoked`;
+  },
+  async deleteStay(id) {
+    const sql = getSql();
+    await sql`delete from stays where id = ${id}`;
+  },
+  async createHost(host) {
+    const sql = getSql();
+    await sql`insert into hosts (id, email, name, password_hash)
+              values (${host.id}, ${host.email}, ${host.name}, ${host.passwordHash})`;
+  },
+  async track(propertyId, kind, value) {
+    /* Contador agregado por alojamiento y día. Sin identificador de dispositivo
+       ni de huésped: no hay dato personal que proteger. */
+    const sql = getSql();
+    await sql`
+      insert into metrics (property_id, day, kind, value, count)
+      values (${propertyId}, current_date, ${kind}, ${value}, 1)
+      on conflict (property_id, day, kind, value)
+      do update set count = metrics.count + 1`;
+  },
+  async metrics(propertyId) {
+    const sql = getSql();
+    const rows = await sql<{ kind: MetricKind; value: string; count: string }[]>`
+      select kind, value, sum(count)::int as count from metrics
+      where property_id = ${propertyId} and day > current_date - interval '90 days'
+      group by kind, value order by count desc limit 40`;
+    return rows.map((row) => ({ kind: row.kind, value: row.value, count: Number(row.count) }));
   },
   async getGuide(propertyId, locale) {
     const sql = getSql();

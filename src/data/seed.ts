@@ -1,4 +1,4 @@
-import type { Guide, Locale, Place, Property } from "@/lib/schema";
+import type { Guide, Locale, Place, Property, Stay } from "@/lib/schema";
 
 /* ---------------------------------------------------------------------------
    Datos de demostración. Dos alojamientos para probar que la app es
@@ -46,8 +46,7 @@ export const PROPERTIES: Property[] = [
     accessCode: "4718",
     checkinFrom: "15:00",
     checkoutUntil: "11:00",
-    stayFrom: null,
-    stayTo: null,
+    accessCodeUpdatedAt: null,
     contacts: [
       { kind: "emergencias", phone: "112" },
       { kind: "salud", phone: "+34951065100", detail: "Hospital Comarcal de la Serranía" },
@@ -76,8 +75,7 @@ export const PROPERTIES: Property[] = [
     accessCode: "9042",
     checkinFrom: "16:00",
     checkoutUntil: "11:00",
-    stayFrom: null,
-    stayTo: null,
+    accessCodeUpdatedAt: null,
     contacts: [
       { kind: "emergencias", phone: "112" },
       { kind: "salud", phone: "061", detail: "Urgencias sanitarias" },
@@ -88,7 +86,7 @@ export const PROPERTIES: Property[] = [
     ],
     defaultLocale: "es",
     published: true,
-    pin: "2610",
+    pin: null,
   },
 ];
 
@@ -789,5 +787,54 @@ export const PLACES: Place[] = [
       ["Ouverte toute la nuit", "À quatre-vingts mètres de l'immeuble. Un interprète anglais est joignable par téléphone si besoin."],
       ["Aberta toda a noite", "A oitenta metros do prédio. Têm intérprete de inglês por telefone, se precisar."],
     ),
+  },
+];
+
+/* ---------------------------------------------------------------------------
+   Estancias de demostración, con fechas RELATIVAS AL DÍA EN QUE SE EJECUTA.
+   Si el revisor abre esto en septiembre, la demo sigue teniendo sentido: una
+   reserva en curso, una que aún no ha empezado y otra terminada que ya muestra
+   el modo recuerdo con el acceso cortado.
+--------------------------------------------------------------------------- */
+const shift = (days: number): string => {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+export const STAYS: Stay[] = [
+  {
+    id: "stay_ronda_actual",
+    propertyId: "prop_ronda",
+    slug: "r7d3ka92",
+    guestName: "Claire",
+    arrival: shift(-2),
+    departure: shift(3),
+    accessCodeOverride: null,
+    pin: null,
+    revoked: false,
+  },
+  {
+    id: "stay_ronda_proxima",
+    propertyId: "prop_ronda",
+    slug: "r5xw81nq",
+    guestName: "Tomás",
+    arrival: shift(9),
+    departure: shift(13),
+    accessCodeOverride: null,
+    /* Reserva protegida con PIN: enseña que el PIN se pone por huésped. */
+    pin: "2610",
+    revoked: false,
+  },
+  {
+    id: "stay_madrid_pasada",
+    propertyId: "prop_madrid",
+    slug: "mv8ktp41",
+    guestName: "Ana",
+    arrival: shift(-9),
+    departure: shift(-4),
+    accessCodeOverride: null,
+    pin: null,
+    revoked: false,
   },
 ];

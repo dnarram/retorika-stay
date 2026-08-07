@@ -104,3 +104,10 @@ h3,
   z-index: 0;
   font-family: var(--font-sans);
 }
+
+/* Secciones que el huésped ha decidido no llevarse en papel. */
+@media print {
+  .print-hidden {
+    display: none !important;
+  }
+}

@@ -133,3 +133,94 @@ formas que no van a cambiar.
 - **Pruebas automatizadas.** Hay un guion de humo (`scripts/smoke.sh`) que verifica autenticación,
   autorización, validación, límite de intentos y que el código de acceso no se filtre. Con más
   tiempo, Vitest para `geo`, `stay` y `completeness`, que son lógica pura y fácil de fijar.
+
+---
+
+# Segunda iteración (6 de agosto)
+
+## 13. La reserva como entidad, y el enlace que caduca
+
+**Contexto.** El fallo de diseño de la primera versión: la URL de una guía era una credencial sin
+caducidad. Quien la tuvo una vez la tenía para siempre, con el código de la puerta dentro.
+
+**Decisión.** Las fechas dejan de colgar del alojamiento y pasan a la reserva. Cada reserva estrena
+enlace, se revoca por separado y, fuera de su ventana, el servidor deja de serializar el código de
+entrada y la clave del WiFi. La guía no se apaga: se degrada.
+
+**Consecuencia buscada.** Un enlace filtrado se agota con su propia reserva, y se sabe de qué
+huésped salió.
+
+**Límite reconocido.** Nada de esto impide una captura de pantalla. El objetivo es reducir la
+ventana de exposición, no declararla imposible.
+
+## 14. Dos tipos de enlace
+
+**Decisión.** El slug del alojamiento y el slug de la reserva se resuelven en la misma ruta pero dan
+guías distintas: el del alojamiento es el que se pega en el anuncio y nunca enseña lo que abre la
+casa; el de la reserva es el del QR de la nevera.
+
+**Por qué importa.** Sin esa separación, cualquier anfitrión que quisiera enseñar su guía a un
+posible huésped tendría que enseñarle también el código de la puerta.
+
+## 15. Las traducciones dejan de necesitar revisión humana
+
+**Contexto.** La primera versión marcaba en rojo las traducciones sin revisar. Un anfitrión que no
+habla francés no puede revisar el francés: era una tarea imposible y permanente en su panel.
+
+**Decisión.** Al publicar se generan los cuatro idiomas. El estado "revisada" desaparece de la
+interfaz y de la puntuación de completitud; se conserva en la base de datos por si algún día el
+anfitrión quiere repasar el idioma que sí domina. La guía avisa al huésped con una línea a pie de
+página.
+
+**Descartado.** Exigir revisión antes de publicar, que habría dejado a la mayoría de los anfitriones
+con guías monolingües para siempre.
+
+## 16. Un asistente de IA, y solo en el editor
+
+**Decisión.** La IA ordena y traduce lo que el anfitrión ha escrito, con una persona que lee la
+sugerencia y decide. En la guía del huésped no hay chat.
+
+**Por qué.** Si un modelo se inventa el horario de una farmacia ante un huésped, el responsable es
+el anfitrión. En el editor el error se corrige antes de publicar; en la guía, no. El prompt prohíbe
+inventar datos y deja huecos entre corchetes cuando falta información.
+
+**Sustituto en la guía.** El buscador determinista, que solo encuentra lo que el anfitrión escribió,
+y un botón para preguntar directamente al anfitrión cuando no hay resultado.
+
+## 17. Importar desde Airbnb: comprobado que no se puede
+
+**Hallazgo.** En 2026 la API de Airbnb sigue restringida a socios aprobados y el programa está
+cerrado a solicitudes no invitadas. Las alternativas son scrapers de terceros: contra los términos
+de servicio, frágiles y jurídicamente turbios.
+
+**Decisión.** No se integra. El problema real —que rellenar la guía cansa— se ataca por otro lado:
+geocodificación de la dirección con Nominatim (sin clave, sin cuota) para que el anfitrión no vea
+nunca un campo de latitud, y una guía en blanco pero con la estructura ya puesta.
+
+## 18. Métricas sin identificar a nadie
+
+**Decisión.** Contadores agregados por alojamiento, día, tipo y valor. Sin cookies, sin huella de
+dispositivo, sin IP y sin identificador de huésped.
+
+**Por qué así.** Al anfitrión le sirve "el 60% de mis huéspedes abre la guía en inglés", no "Claire
+miró las normas a las 23:40". Agregar por alojamiento mantiene esto lejos de ser dato personal, que
+es donde queremos estar. La métrica más útil resultó ser la más barata: qué buscó el huésped y no
+encontró, que le dice al anfitrión qué falta en su guía con las palabras del propio huésped.
+
+## 19. El recuerdo del viaje se compone en el móvil
+
+**Decisión.** Cuando la reserva termina, la guía muestra el resumen del viaje —sitios marcados,
+noches, kilómetros estimados— y permite componer una tarjeta con una foto del huésped.
+
+**Restricción autoimpuesta.** La foto nunca sube al servidor: se dibuja en un canvas local y se
+descarga desde ahí. Sin almacenamiento, sin coste y sin un solo problema de protección de datos. Es
+la única forma honesta de ofrecer algo compartible en una app que presume de no pedirle nada a quien
+la abre.
+
+## 20. Entrar con Google: pendiente, y con una precisión
+
+Entrar con Google es OAuth 2.0 / OpenID Connect; el JWT es el formato del token con el que después
+se mantiene la sesión, que es lo que la app ya hace con `jose`. No son alternativas, son dos capas
+distintas. La integración está pendiente y no cambia nada de lo anterior: se apoya sobre la sesión
+que ya existe. El acceso con correo y contraseña sigue siendo el camino principal, entre otras cosas
+porque es el que permite entrar con la cuenta de demostración.

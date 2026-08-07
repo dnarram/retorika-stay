@@ -9,6 +9,7 @@ import type { Check } from "@/lib/completeness";
 import { completeness } from "@/lib/completeness";
 import {
   LOCALES,
+  type Stay,
   PLACE_CATEGORIES,
   type Guide,
   type Locale,
@@ -24,7 +25,7 @@ const STEPS = [
   "Normas",
   "Recomendaciones",
   "Moverse y emergencias",
-  "Salida, idiomas y publicación",
+  "Salida, reservas y publicación",
 ] as const;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -33,12 +34,14 @@ export default function Editor({
   property: initialProperty,
   guides: initialGuides,
   places: initialPlaces,
+  stays: initialStays,
   checks,
   mode,
 }: {
   property: Property;
   guides: GuideRecord[];
   places: Place[];
+  stays: Stay[];
   initialScore: number;
   checks: Check[];
   mode: "postgres" | "demo";
@@ -46,6 +49,9 @@ export default function Editor({
   const [property, setProperty] = useState(initialProperty);
   const [guides, setGuides] = useState(initialGuides);
   const [places, setPlaces] = useState(initialPlaces);
+  const [stays, setStays] = useState(initialStays);
+  const [geo, setGeo] = useState<string | null>(null);
+  const [assist, setAssist] = useState<string | null>(null);
   const [locale, setLocale] = useState<Locale>(initialProperty.defaultLocale);
   const [step, setStep] = useState(1);
   const [save, setSave] = useState<SaveState>("idle");
@@ -171,6 +177,94 @@ export default function Editor({
     await fetch(`/api/places/${id}`, { method: "DELETE" });
   }
 
+  /* Escribe la dirección, salen las coordenadas. El anfitrión no vuelve a ver
+     un campo de latitud en su vida. */
+  async function locate() {
+    setGeo("Buscando…");
+    const response = await fetch(
+      `/api/geocode?q=${encodeURIComponent(`${property.address}, ${property.city}`)}`,
+    );
+    if (!response.ok) {
+      setGeo("No se encontró la dirección. Puedes ajustar las coordenadas a mano.");
+      return;
+    }
+    const { results } = (await response.json()) as {
+      results: { lat: number; lng: number; label: string }[];
+    };
+    if (!results[0]) {
+      setGeo("Sin resultados. Prueba a añadir el número y el código postal.");
+      return;
+    }
+    patchProperty({ lat: results[0].lat, lng: results[0].lng });
+    setGeo(results[0].label);
+  }
+
+  /* El asistente ORDENA lo que el anfitrión ha escrito; no añade hechos. La
+     sugerencia se muestra para que él la acepte o la descarte: nunca se guarda
+     sola. */
+  async function suggest(task: "pasos" | "normas" | "nota" | "pulir", input: string) {
+    setAssist("Pensando…");
+    const response = await fetch("/api/assist", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ task, input }),
+    });
+    const payload = (await response.json()) as { suggestion?: string; error?: string };
+    setAssist(payload.suggestion ?? payload.error ?? "No se pudo generar la sugerencia.");
+  }
+
+  async function saveStay(stay: Stay) {
+    setStays((current) => current.map((s) => (s.id === stay.id ? stay : s)));
+    await fetch("/api/stays", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        propertyId: property.id,
+        id: stay.id,
+        revoked: stay.revoked,
+        stay: {
+          guestName: stay.guestName,
+          arrival: stay.arrival,
+          departure: stay.departure,
+          accessCodeOverride: stay.accessCodeOverride,
+          pin: stay.pin,
+        },
+      }),
+    });
+  }
+
+  async function addStay() {
+    const today = new Date();
+    const iso = (days: number) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() + days);
+      return date.toISOString().slice(0, 10);
+    };
+    const response = await fetch("/api/stays", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        propertyId: property.id,
+        stay: {
+          guestName: "",
+          arrival: iso(0),
+          departure: iso(3),
+          accessCodeOverride: null,
+          pin: null,
+        },
+      }),
+    });
+    if (response.ok) {
+      const { stay } = (await response.json()) as { stay: Stay };
+      setStays((current) => [stay, ...current]);
+    }
+  }
+
+  async function removeStay(id: string) {
+    setStays((current) => current.filter((s) => s.id !== id));
+    await fetch(`/api/stays/${id}`, { method: "DELETE" });
+  }
+
   async function translate(to: Locale) {
     setMessage(`Traduciendo al ${LOCALE_NAMES[to]}…`);
     const response = await fetch("/api/translate", {
@@ -247,6 +341,14 @@ export default function Editor({
               <Field label="Nombre" value={property.name} onChange={(v) => patchProperty({ name: v })} />
               <Field label="Ciudad" value={property.city} onChange={(v) => patchProperty({ city: v })} />
               <Field label="Dirección" value={property.address} onChange={(v) => patchProperty({ address: v })} />
+              <button
+                type="button"
+                onClick={locate}
+                className="rounded-full px-4 py-2 text-sm font-medium ring-1 ring-brand-line"
+              >
+                Buscar coordenadas desde la dirección
+              </button>
+              {geo ? <p className="text-xs text-muted">{geo}</p> : null}
               <div className="grid grid-cols-2 gap-3">
                 <Field
                   label="Latitud"
@@ -288,6 +390,45 @@ export default function Editor({
                   onChange={(arrivalSteps) => patchGuide({ arrivalSteps })}
                   placeholder="Ej.: la caja de llaves es la gris, a la izquierda del portal."
                 />
+                <div className="rounded-xl bg-brand-soft p-3">
+                  <button
+                    type="button"
+                    onClick={() => suggest("pasos", (guide?.content.arrivalSteps ?? []).join("\n"))}
+                    className="rounded-full bg-white px-4 py-2 text-sm font-medium text-brand-deep ring-1 ring-brand-line"
+                  >
+                    Ordenar mis notas con el asistente
+                  </button>
+                  <p className="mt-2 text-xs text-brand-ink">
+                    Reescribe lo que ya has puesto. No inventa datos: si falta algo, lo deja entre
+                    corchetes para que lo completes tú.
+                  </p>
+                  {assist ? (
+                    <div className="mt-3 rounded-lg bg-white p-3 text-sm">
+                      <pre className="whitespace-pre-wrap font-sans">{assist}</pre>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            patchGuide({
+                              arrivalSteps: assist.split("\n").map((l) => l.replace(/^\d+[.)]\s*/, "")).filter(Boolean),
+                            });
+                            setAssist(null);
+                          }}
+                          className="rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white"
+                        >
+                          Usar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAssist(null)}
+                          className="rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-line"
+                        >
+                          Descartar
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
                 <Area label="Aparcamiento" value={guide?.content.parking ?? ""} onChange={(v) => patchGuide({ parking: v })} />
               </Panel>
               <Panel title="WiFi">
@@ -540,32 +681,112 @@ export default function Editor({
                 />
               </Panel>
 
+              <Panel title="Reservas">
+                <p className="text-sm text-muted">
+                  Cada reserva genera su propio enlace. Cuando termina, el código de entrada y la
+                  clave del WiFi dejan de mostrarse en esa guía sin que tengas que hacer nada. El
+                  enlace de muestra del alojamiento nunca los enseña.
+                </p>
+                <ul className="mt-3 space-y-3">
+                  {stays.map((stay) => (
+                    <li key={stay.id} className="rounded-xl border border-line p-3">
+                      <div className="grid gap-2 sm:grid-cols-[1fr_140px_140px]">
+                        <Field
+                          label="Huésped"
+                          value={stay.guestName ?? ""}
+                          onChange={(v) => saveStay({ ...stay, guestName: v })}
+                        />
+                        <label className="block text-sm">
+                          <span className="font-medium">Llegada</span>
+                          <input
+                            type="date"
+                            value={stay.arrival}
+                            onChange={(event) => saveStay({ ...stay, arrival: event.target.value })}
+                            className="mt-1 w-full rounded-xl border border-line px-3 py-2 outline-none focus:border-brand"
+                          />
+                        </label>
+                        <label className="block text-sm">
+                          <span className="font-medium">Salida</span>
+                          <input
+                            type="date"
+                            value={stay.departure}
+                            onChange={(event) => saveStay({ ...stay, departure: event.target.value })}
+                            className="mt-1 w-full rounded-xl border border-line px-3 py-2 outline-none focus:border-brand"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                        <a
+                          href={`/g/${stay.slug}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-xs text-brand-deep underline"
+                        >
+                          /g/{stay.slug}
+                        </a>
+                        <a
+                          href={`/api/qr?size=600&data=${encodeURIComponent(`/g/${stay.slug}`)}`}
+                          download={`qr-${stay.slug}.svg`}
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-line"
+                        >
+                          <IconQr size={14} /> QR de esta reserva
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => saveStay({ ...stay, revoked: !stay.revoked })}
+                          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                            stay.revoked ? "bg-alert-soft text-alert-ink" : "ring-1 ring-line"
+                          }`}
+                        >
+                          {stay.revoked ? "Revocada" : "Revocar acceso"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeStay(stay.id)}
+                          aria-label="Eliminar reserva"
+                          className="ml-auto text-muted hover:text-alert-ink"
+                        >
+                          <IconTrash size={16} />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={addStay}
+                  className="mt-3 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white"
+                >
+                  Añadir reserva
+                </button>
+              </Panel>
+
               <Panel title="Idiomas">
                 <p className="text-sm text-muted">
-                  El huésped ve la guía en el idioma de su navegador. Lo traducido entra como
-                  borrador y se marca en la guía hasta que lo repasas.
+                  El huésped ve la guía en el idioma de su navegador. Al publicar se generan los
+                  cuatro automáticamente y la guía avisa al huésped de que la traducción es
+                  automática: no te pedimos que revises un idioma que no hablas.
                 </p>
                 <ul className="mt-3 space-y-2">
                   {LOCALES.map((code) => {
                     const record = guides.find((g) => g.locale === code);
                     return (
-                      <li key={code} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3 py-2">
+                      <li
+                        key={code}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3 py-2"
+                      >
                         <span className="text-sm font-medium">{LOCALE_NAMES[code]}</span>
                         <span className="flex items-center gap-2">
                           <span
                             className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                              !record
-                                ? "bg-alert-soft text-alert-ink"
-                                : record.reviewed
-                                  ? "bg-ok-soft text-ok-ink"
-                                  : "bg-alert-soft text-alert-ink"
+                              record ? "bg-ok-soft text-ok-ink" : "bg-canvas text-muted"
                             }`}
                           >
-                            {record ? (record.reviewed ? <IconCheck size={13} /> : <IconCross size={13} />) : <IconCross size={13} />}
-                            {!record ? "Sin traducir" : record.reviewed ? "Revisada" : "Borrador"}
+                            {record ? <IconCheck size={13} /> : <IconCross size={13} />}
+                            {record ? "Disponible" : "Sin generar"}
                           </span>
                           {code === property.defaultLocale ? (
-                            <span className="text-xs text-muted">original</span>
+                            <span className="text-xs text-muted">tu idioma</span>
                           ) : (
                             <>
                               <button
@@ -573,14 +794,14 @@ export default function Editor({
                                 onClick={() => translate(code)}
                                 className="rounded-full px-3 py-1 text-xs font-medium ring-1 ring-line"
                               >
-                                Traducir
+                                {record ? "Regenerar" : "Generar"}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setLocale(code)}
                                 className="rounded-full px-3 py-1 text-xs font-medium ring-1 ring-line"
                               >
-                                Revisar
+                                Editar
                               </button>
                             </>
                           )}

@@ -60,10 +60,9 @@ export const propertySchema = z.object({
   wifiSecurity: z.enum(["WPA", "WEP", "nopass"]).default("WPA"),
   /* Dato sensible: nunca viaja al cliente fuera de la ventana de estancia. */
   accessCode: z.string().max(32),
+  accessCodeUpdatedAt: z.string().nullable(),
   checkinFrom: z.string().regex(/^\d{2}:\d{2}$/),
   checkoutUntil: z.string().regex(/^\d{2}:\d{2}$/),
-  stayFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
-  stayTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   contacts: z.array(contactSchema).max(12),
   defaultLocale: localeSchema,
   published: z.boolean(),
@@ -123,3 +122,39 @@ export const placeInputSchema = placeSchema.omit({ id: true, propertyId: true })
 
 export type PropertyPatch = z.infer<typeof propertyPatchSchema>;
 export type GuidePatch = z.infer<typeof guidePatchSchema>;
+
+/* ---------------------------------------------------------------------------
+   Estancia. Es la pieza que faltaba: hasta ahora las fechas colgaban del
+   alojamiento, así que el enlace de una guía era una credencial sin caducidad.
+   Con la estancia, cada reserva tiene su propio enlace, se puede revocar por
+   separado y el acceso deja de servirse cuando el huésped se va.
+--------------------------------------------------------------------------- */
+export const staySchema = z.object({
+  id: z.string(),
+  propertyId: z.string(),
+  /* Enlace propio de la reserva, distinto del enlace de muestra del piso. */
+  slug: z.string().min(6),
+  guestName: z.string().max(60).nullable(),
+  arrival: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  departure: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /* Código propio de la estancia (cerraduras inteligentes). Si es null, se usa
+     el del alojamiento. */
+  accessCodeOverride: z.string().max(32).nullable(),
+  pin: z.string().regex(/^\d{4}$/).nullable(),
+  revoked: z.boolean(),
+});
+export type Stay = z.infer<typeof staySchema>;
+
+export const stayInputSchema = staySchema.omit({ id: true, propertyId: true, slug: true, revoked: true });
+
+/* Métrica agregada por alojamiento y día. Nunca por huésped ni por dispositivo:
+   sin identificadores no hay dato personal que proteger. */
+export const METRIC_KINDS = ["apertura", "idioma", "seccion", "busqueda_sin_resultado", "llamada"] as const;
+export const metricKindSchema = z.enum(METRIC_KINDS);
+export type MetricKind = (typeof METRIC_KINDS)[number];
+
+export const trackSchema = z.object({
+  slug: z.string().min(6),
+  kind: metricKindSchema,
+  value: z.string().max(60).default(""),
+});

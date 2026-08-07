@@ -15,7 +15,11 @@ export default async function EditorPage(props: { params: Promise<{ id: string }
   const property = await repo.getProperty(id);
   if (!property || property.hostId !== hostId) notFound();
 
-  const [guides, places] = await Promise.all([repo.listGuides(id), repo.listPlaces(id)]);
+  const [guides, places, stays] = await Promise.all([
+    repo.listGuides(id),
+    repo.listPlaces(id),
+    repo.listStays(id),
+  ]);
   const { score, checks } = completeness(property, guides, places);
 
   return (
@@ -23,6 +27,7 @@ export default async function EditorPage(props: { params: Promise<{ id: string }
       property={property}
       guides={guides}
       places={places}
+      stays={stays}
       initialScore={score}
       checks={checks}
       mode={repo.mode}
