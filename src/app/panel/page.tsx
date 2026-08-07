@@ -23,7 +23,7 @@ export default async function PanelPage() {
         repo.metrics(property.id),
       ]);
       const { score, pending } = completeness(property, guides, places);
-      const opens = metrics.filter((m) => m.kind === "apertura").reduce((n, m) => n + m.count, 0);
+      const opens = metrics.filter((m) => m.kind === "open").reduce((n, m) => n + m.count, 0);
 
       return {
         id: property.id,
@@ -33,8 +33,8 @@ export default async function PanelPage() {
         published: property.published,
         score,
         nextStep: pending[0] ? { label: pending[0].label, hint: pending[0].hint } : null,
-        /* El aviso que ningún competidor va a tener: una estancia ha terminado y
-           el código de la puerta sigue siendo el mismo que tenía ese huésped. */
+        /* The warning nobody else will have: a booking has ended and the door
+           code is still the one that guest was given. */
         rotateCode: needsCodeRotation(property, stays),
         stays: stays.map((stay) => ({
           id: stay.id,
@@ -48,10 +48,10 @@ export default async function PanelPage() {
         metrics: {
           opens,
           languages: metrics
-            .filter((m) => m.kind === "idioma")
+            .filter((m) => m.kind === "language")
             .map((m) => ({ value: m.value, count: m.count })),
           misses: metrics
-            .filter((m) => m.kind === "busqueda_sin_resultado")
+            .filter((m) => m.kind === "search_miss")
             .slice(0, 5)
             .map((m) => ({ value: m.value, count: m.count })),
         },

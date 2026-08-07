@@ -1,6 +1,6 @@
-/* Carga útil del QR de WiFi (formato de Android/iOS): al escanearlo el móvil se
-   conecta sin teclear la clave. Es la micro-utilidad con mejor relación entre
-   valor para el huésped y coste de implementación de toda la app. */
+/* Wi-Fi QR payload (the format Android and iOS understand): scanning it joins
+   the network without typing the password. Best value-to-effort ratio of any
+   feature in the app. */
 export function wifiQrPayload(input: {
   ssid: string;
   password: string;

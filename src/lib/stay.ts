@@ -1,28 +1,28 @@
 import type { Property, Stay } from "./schema";
 
 /* ---------------------------------------------------------------------------
-   El ciclo de vida de una guía.
+   The life cycle of a guide.
 
-   Una guía de alojamiento contiene la llave de una casa habitada. Mientras el
-   enlace fuese eterno, quien lo tuvo una vez lo tenía para siempre. Con la
-   estancia como entidad, el enlace tiene principio y final:
+   A property guide holds the key to a home someone lives in. While the link
+   never expired, whoever held it once held it forever. With the booking as a
+   first-class entity, the link now has a beginning and an end:
 
-     antes → llegada → estancia → salida → recuerdo
+     before → arrival → staying → departure → memories
 
-   En "recuerdo" la guía NO se apaga: se degrada. El código de acceso, la clave
-   del WiFi y las instrucciones de entrada dejan de servirse desde el servidor;
-   las recomendaciones, el mapa y el resumen del viaje siguen ahí. El huésped no
-   se encuentra una puerta cerrada, se encuentra una guía que ya no abre puertas.
+   In "memories" the guide is NOT switched off: it degrades. The access code,
+   the Wi-Fi password and the entry instructions stop being served; the
+   recommendations, the map and the trip summary stay. The guest does not hit a
+   closed door — they find a guide that no longer opens doors.
 
-   Esto no impide una captura de pantalla, y no pretende hacerlo: reduce la
-   ventana de exposición de "para siempre" a "los días de la reserva".
+   This does not prevent a screenshot, and it does not pretend to: it shrinks
+   the exposure window from "forever" down to "the days of the booking".
 --------------------------------------------------------------------------- */
 
-export const PHASES = ["antes", "llegada", "estancia", "salida", "recuerdo"] as const;
+export const PHASES = ["before", "arrival", "staying", "departure", "memories"] as const;
 export type StayPhase = (typeof PHASES)[number];
 
-/* Margen tras la salida antes de cortar los datos sensibles: un vuelo se
-   retrasa, un huésped vuelve a por algo olvidado. Un día es suficiente. */
+/* Grace period after check-out before sensitive data is cut off: flights get
+   delayed, guests come back for something they forgot. One day is enough. */
 const GRACE_DAYS = 1;
 
 export function isPhase(value: unknown): value is StayPhase {
@@ -41,16 +41,16 @@ export function shiftDays(iso: string, days: number): string {
 
 export function stayPhase(stay: Pick<Stay, "arrival" | "departure">, now = new Date()): StayPhase {
   const today = todayISO(now);
-  if (today < stay.arrival) return "antes";
-  if (today === stay.arrival) return "llegada";
-  if (today === stay.departure) return "salida";
-  if (today > stay.departure) return "recuerdo";
-  return "estancia";
+  if (today < stay.arrival) return "before";
+  if (today === stay.arrival) return "arrival";
+  if (today === stay.departure) return "departure";
+  if (today > stay.departure) return "memories";
+  return "staying";
 }
 
-/* Los datos sensibles viajan al navegador desde el día antes de la llegada
-   hasta un día después de la salida. Fuera de esa ventana no están ocultos por
-   CSS: no existen en el HTML. */
+/* Sensitive data reaches the browser from the day before arrival until one day
+   after departure. Outside that window it is not hidden with CSS: it does not
+   exist in the HTML at all. */
 export function canRevealAccess(
   stay: Pick<Stay, "arrival" | "departure" | "revoked">,
   now = new Date(),
@@ -65,9 +65,9 @@ export function nightsBetween(from: string, to: string): number {
   return ms > 0 ? Math.round(ms / 86400000) : 0;
 }
 
-/* El código de acceso de una estancia terminada sigue abriendo la puerta para
-   la siguiente mientras el anfitrión no lo cambie: la app no puede girar una
-   caja de llaves física, pero sí puede avisar de que toca hacerlo. */
+/* A finished booking's access code still opens the door for the next guest
+   until the host changes it. The app cannot turn a physical key box, but it can
+   say out loud that it is time to do so. */
 export function needsCodeRotation(
   property: Pick<Property, "accessCodeUpdatedAt">,
   stays: Pick<Stay, "departure" | "accessCodeOverride">[],
@@ -84,13 +84,13 @@ export function needsCodeRotation(
   return property.accessCodeUpdatedAt.slice(0, 10) < lastFinished;
 }
 
-/* Dos tipos de enlace, y esa es la decisión de seguridad más importante del
-   rediseño:
+/* Two kinds of link, and this is the most important security decision of the
+   redesign:
 
-   · muestra   → el que el anfitrión pega en el anuncio. Enseña la guía entera
-                 MENOS lo que abre la casa. Se puede compartir con desconocidos.
-   · estancia  → el del QR de la nevera. Da acceso completo, y solo mientras
-                 dura la reserva. */
+   · listing → the one the host pastes into the rental ad. Shows the whole guide
+               EXCEPT anything that opens the home. Safe to share with strangers.
+   · booking → the one on the fridge QR. Full access, and only for as long as
+               the booking lasts. */
 export type Audience =
-  | { kind: "estancia"; phase: StayPhase; reveal: boolean }
-  | { kind: "muestra"; phase: StayPhase; reveal: false };
+  | { kind: "booking"; phase: StayPhase; reveal: boolean }
+  | { kind: "listing"; phase: StayPhase; reveal: false };

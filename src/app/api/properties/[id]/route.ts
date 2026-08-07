@@ -10,8 +10,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const { id } = await context.params;
   const repo = getRepo();
   const property = await repo.getProperty(id);
-  /* Autorización, no solo autenticación: un anfitrión no puede editar la ficha
-     de otro cambiando el id de la URL. */
+  /* Authorisation, not just authentication: a host cannot edit someone else's
+     property by changing the id in the URL. */
   if (!property || property.hostId !== hostId) {
     return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   }
@@ -21,8 +21,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ error: "Datos no válidos", detail: parsed.error.flatten() }, { status: 422 });
   }
 
-  /* Si cambia el código de acceso, se sella la fecha: es lo que permite avisar
-     al anfitrión cuando una estancia termina y el código sigue siendo el mismo. */
+  /* When the access code changes we stamp the date: that is what lets us warn
+     the host when a booking ends and the code is still the same one. */
   const patch = { ...parsed.data };
   if (patch.accessCode !== undefined && patch.accessCode !== property.accessCode) {
     patch.accessCodeUpdatedAt = new Date().toISOString();
@@ -30,10 +30,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const updated = await repo.updateProperty(id, patch);
 
-  /* Al publicar, los cuatro idiomas se generan solos.
-     El anfitrión no habla francés ni portugués: pedirle que "revise" esas
-     versiones sería pedirle un imposible y dejarle una tarea abierta para
-     siempre en el panel. La guía se lo dice al huésped y ahí acaba el asunto. */
+  /* Publishing generates all four languages.
+     The host speaks neither French nor Portuguese: asking them to "review"
+     those versions would be asking for the impossible and would leave a task
+     open in their dashboard forever. The guide tells the guest instead, and
+     that closes the matter. */
   let translated: string[] = [];
   if (patch.published === true && process.env.GROQ_API_KEY) {
     const source = updated?.defaultLocale ?? property.defaultLocale;

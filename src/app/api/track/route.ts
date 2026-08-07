@@ -2,16 +2,16 @@ import { NextResponse } from "next/server";
 import { getRepo } from "@/lib/repo";
 import { trackSchema } from "@/lib/schema";
 
-/* Métrica sin analítica de terceros y sin identificar a nadie.
+/* Metrics without third-party analytics and without identifying anyone.
 
-   Lo que se guarda: un contador por alojamiento, día, tipo y valor.
-   Lo que NO se guarda: cookies, huella del dispositivo, IP, identificador de
-   huésped ni nada que permita reconstruir el recorrido de una persona. Al
-   anfitrión le interesa "el 60% de mis huéspedes abre la guía en inglés", no
-   "Claire miró la sección de normas a las 23:40".
+   What is stored: a counter per property, day, kind and value.
+   What is NOT stored: cookies, device fingerprints, IP addresses, guest ids or
+   anything that would let us reconstruct one person's path through the guide.
+   The host benefits from "60% of my guests open the guide in English", not from
+   "Claire read the house rules at 23:40".
 
-   Agregar a nivel de alojamiento es además lo que mantiene esto lejos de ser
-   dato personal, que es exactamente donde queremos estar. */
+   Aggregating at property level is also what keeps this well clear of being
+   personal data, which is exactly where we want to be. */
 export async function POST(request: Request) {
   const parsed = trackSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false }, { status: 400 });
@@ -23,6 +23,6 @@ export async function POST(request: Request) {
   if (!property) return NextResponse.json({ ok: false }, { status: 404 });
 
   await repo.track(property.id, kind, value.slice(0, 60));
-  /* 204: al huésped no le devolvemos nada, ni siquiera un cuerpo que descargar. */
+  /* 204: nothing is sent back to the guest, not even a body to download. */
   return new NextResponse(null, { status: 204 });
 }

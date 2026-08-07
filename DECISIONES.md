@@ -224,3 +224,56 @@ se mantiene la sesión, que es lo que la app ya hace con `jose`. No son alternat
 distintas. La integración está pendiente y no cambia nada de lo anterior: se apoya sobre la sesión
 que ya existe. El acceso con correo y contraseña sigue siendo el camino principal, entre otras cosas
 porque es el que permite entrar con la cuenta de demostración.
+
+---
+
+# Tercera iteración (6 de agosto)
+
+## 21. El código y sus comentarios pasan al inglés
+
+**Decisión.** Comentarios, mensajes de consola y vocabulario del dominio en inglés. La interfaz del
+anfitrión sigue en español, la guía del huésped en cuatro idiomas y esta documentación en español.
+
+**Alcance real.** No fue solo traducir comentarios: los enumerados del dominio estaban en español y
+viajaban hasta las restricciones `check` de PostgreSQL. `category: "comer"` pasó a `"restaurant"`,
+`kind: "emergencias"` a `"emergency"`, las fases de la reserva a `before / arrival / staying /
+departure / memories` y los tipos de métrica a `open / language / section / search_miss / call`.
+Media medida —comentarios en inglés y literales en español— habría quedado peor que no haber
+empezado.
+
+**Coste.** Toca el esquema, así que hay migración. Se hizo antes de que existan datos reales, que es
+justo cuando sale gratis.
+
+## 22. Verificado contra PostgreSQL de verdad
+
+**Contexto.** Toda la capa de datos estaba escrita y ninguna consulta se había ejecutado nunca. El
+modo demostración daba una falsa sensación de cobertura: pasaba la batería entera sin tocar SQL.
+
+**Qué apareció al ejecutarla contra PostgreSQL 16.**
+
+1. `postgres.js` rechaza un script con `begin`/`commit` dentro de `unsafe()`. Hace falta `max: 1` en
+   la conexión y el protocolo simple, que es el único que acepta varias sentencias por llamada.
+2. Las columnas `date` vuelven como objetos `Date` de JavaScript. `String(fecha).slice(0, 10)` daba
+   `"Wed Aug 06"` en lugar de `"2026-08-06"`, y con eso se caía toda la aritmética del ciclo de vida
+   de la reserva: la guía de una estancia en curso devolvía un 500.
+
+**Lección que me llevo.** Una capa de abstracción con dos implementaciones es cómoda para el que
+revisa el proyecto, pero puede esconder que una de las dos nunca se ha ejecutado. La batería ahora
+se pasa en los dos modos y cubre el camino de escritura completo, incluido el borrado en cascada
+comprobado con SQL.
+
+## 23. Entrar con Google, escrito a mano
+
+**Decisión.** El flujo OAuth 2.0 / OpenID Connect implementado directamente contra los endpoints de
+Google, sobre la sesión JWT que la app ya tenía.
+
+**Descartado.** NextAuth: una dependencia, un adaptador y una capa de configuración para sustituir
+unas cien líneas que merece la pena leer. Aquí está el flujo entero, incluidas las dos protecciones
+que más se saltan: `state` firmado en cookie y en URL contra CSRF en el callback, y `nonce` que ata
+el ID token a esa petición concreta. El ID token se verifica contra las claves públicas de Google,
+no se decodifica y se cree; se comprueban emisor, audiencia, nonce y que el correo esté verificado.
+
+**Comportamiento sin credenciales.** El botón no se renderiza, `/api/auth/google` redirige a la
+portada y el callback rechaza cualquier `state` que no coincida. Correo y contraseña siguen siendo
+el camino principal, entre otras cosas porque es el único que permite entrar con la cuenta de
+demostración.

@@ -3,16 +3,17 @@ import { z } from "zod";
 import { currentHostId } from "@/lib/auth";
 
 /* ---------------------------------------------------------------------------
-   Asistente del EDITOR. Solo aquí, y por una razón concreta.
+   EDITOR assistant. Only here, and for a specific reason.
 
-   En la guía del huésped un modelo generativo puede inventarse un horario o una
-   dirección, y el responsable de ese error sería el anfitrión. En el editor, en
-   cambio, siempre hay una persona que lee la propuesta y decide: la IA ordena
-   lo que el anfitrión ya ha escrito, no aporta hechos nuevos. El prompt lo
-   prohíbe explícitamente y el resultado se devuelve como sugerencia editable,
-   nunca se guarda solo.
+   In the guest guide a generative model could invent an opening time or an
+   address, and the host would be the one held responsible. In the editor there
+   is always a person reading the suggestion and deciding: the model reorganises
+   what the host already wrote, it does not contribute new facts. The prompt
+   forbids that explicitly, and the result comes back as an editable suggestion
+   that is never saved on its own.
 
-   Sin GROQ_API_KEY el editor funciona igual: solo se apaga este botón.
+   Without GROQ_API_KEY the editor works exactly the same; only this button
+   switches off.
 --------------------------------------------------------------------------- */
 
 const TASKS = {
@@ -77,6 +78,6 @@ export async function POST(request: Request) {
   const suggestion = payload.choices?.[0]?.message?.content?.trim();
   if (!suggestion) return NextResponse.json({ error: "Respuesta vacía" }, { status: 502 });
 
-  /* Sugerencia, no guardado: la decisión sigue siendo del anfitrión. */
+  /* A suggestion, not a save: the decision stays with the host. */
   return NextResponse.json({ suggestion });
 }

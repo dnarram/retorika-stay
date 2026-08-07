@@ -1,15 +1,16 @@
-/* Distancias y tiempos a pie calculados a partir de coordenadas.
-   Decisión: el anfitrión NO teclea "a 6 minutos andando" — se deriva del dato.
-   Así ningún idioma se queda con una distancia desactualizada y no hay
-   incoherencias entre las cuatro traducciones. */
+/* Distances and walking times derived from coordinates.
+
+   Design decision: the host never types "6 minutes away" — it is computed from
+   the data. That way no language ends up with a stale distance and the four
+   translations can never disagree with each other. */
 
 const EARTH_RADIUS_M = 6371000;
-/* 4,5 km/h: ritmo real de paseo con maleta o con niños, no el ritmo de marcha
-   de 5 km/h que usan las apps de rutas. Prefiero pasarme por arriba. */
+/* 4.5 km/h: a realistic pace with a suitcase or with children, not the 5 km/h
+   marching pace that routing apps assume. Better to overestimate. */
 const WALKING_SPEED_M_PER_MIN = 75;
-/* Factor de rodeo: la calle no va en línea recta. 1,3 es el valor habitual en
-   trama urbana europea; en cascos históricos con cuestas se queda corto, por eso
-   redondeamos siempre hacia arriba. */
+/* Detour factor: streets do not run in straight lines. 1.3 is the usual value
+   for European urban grids; in hilly old towns it still falls short, which is
+   why we always round up. */
 const DETOUR_FACTOR = 1.3;
 
 const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -42,8 +43,8 @@ export function formatDistance(meters: number): string {
     : `${(walked / 1000).toFixed(1)} km`;
 }
 
-/* Enlace universal a mapas: funciona en iOS, Android y escritorio sin depender
-   de una app concreta ni de una API de pago. */
+/* Universal maps link: works on iOS, Android and desktop without depending on a
+   specific app or on a paid API. */
 export function directionsUrl(to: { lat: number; lng: number; name?: string }): string {
   const q = `${to.lat},${to.lng}`;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;

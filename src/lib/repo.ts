@@ -3,15 +3,15 @@ import { getSql, hasDatabase } from "./db";
 import type { Guide, Locale, MetricKind, Place, Property, Stay } from "./schema";
 
 /* ---------------------------------------------------------------------------
-   Un único contrato de datos con dos implementaciones:
+   One data contract, two implementations:
 
-     · PostgreSQL  — la real, si hay DATABASE_URL.
-     · Memoria     — copia de los datos semilla, si no la hay.
+     · PostgreSQL — the real one, used when DATABASE_URL is set.
+     · In-memory  — a copy of the seed data, used when it is not.
 
-   El motivo no es lucirse con una abstracción: es que quien revise esto pueda
-   clonar el repo, hacer `npm run dev` y ver la app entera funcionando en
-   quince segundos, sin levantar una base de datos. En modo demo las escrituras
-   funcionan pero se pierden al reiniciar, y la interfaz lo dice.
+   The point is not to show off an abstraction. It is that whoever reviews this
+   can clone the repo, run `npm run dev` and see the whole app working in
+   fifteen seconds without provisioning a database. In demo mode writes do work
+   but are lost on restart, and the UI says so.
 --------------------------------------------------------------------------- */
 
 export type Host = { id: string; email: string; name: string; passwordHash: string };
@@ -40,9 +40,22 @@ export interface Repo {
   deletePlace(id: string): Promise<void>;
 }
 
-/* --------------------------------- memoria -------------------------------- */
+/* -------------------------------- in-memory ------------------------------- */
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+/* PostgreSQL returns date and timestamptz columns as JavaScript Date objects,
+   not strings. String(date).slice(0, 10) produced "Wed Aug 06" instead of
+   "2026-08-06" and broke every date comparison in the booking life cycle. Demo
+   mode never showed it because there the values are already strings: this bug
+   only surfaces when running against a real database. */
+const toISODate = (value: unknown): string =>
+  value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+
+const toISOStamp = (value: unknown): string | null => {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : String(value);
+};
 
 const memory = {
   hosts: clone(HOSTS) as Host[],
@@ -181,17 +194,17 @@ const toProperty = (row: PropertyRow): Property => ({
   wifiPassword: row.wifi_password,
   wifiSecurity: row.wifi_security,
   accessCode: row.access_code,
-  checkinFrom: row.checkin_from.slice(0, 5),
-  checkoutUntil: row.checkout_until.slice(0, 5),
-  accessCodeUpdatedAt: row.access_code_updated_at ? String(row.access_code_updated_at) : null,
+  checkinFrom: String(row.checkin_from).slice(0, 5),
+  checkoutUntil: String(row.checkout_until).slice(0, 5),
+  accessCodeUpdatedAt: toISOStamp(row.access_code_updated_at),
   contacts: row.contacts ?? [],
   defaultLocale: row.default_locale,
   published: row.published,
   pin: row.pin,
 });
 
-/* Mapa campo de dominio -> columna. Escrito a mano y no generado para que el
-   PATCH parcial no pueda tocar columnas que el anfitrión no debe cambiar. */
+/* Domain field -> column map. Written by hand rather than generated so that a
+   partial PATCH cannot reach columns the host must not change. */
 const COLUMN: Record<string, string> = {
   name: "name",
   city: "city",
@@ -228,8 +241,8 @@ const toStay = (row: {
   propertyId: row.property_id,
   slug: row.slug,
   guestName: row.guest_name,
-  arrival: String(row.arrival).slice(0, 10),
-  departure: String(row.departure).slice(0, 10),
+  arrival: toISODate(row.arrival),
+  departure: toISODate(row.departure),
   accessCodeOverride: row.access_code_override,
   pin: row.pin,
   revoked: row.revoked,
@@ -290,8 +303,8 @@ const pgRepo: Repo = {
     return property;
   },
   async deleteProperty(id) {
-    /* Las guías, los sitios y las estancias caen con el alojamiento por la
-       cláusula on delete cascade del esquema: una sola sentencia. */
+    /* Guides, places and bookings go with the property thanks to the schema's
+       on delete cascade: a single statement does it. */
     const sql = getSql();
     await sql`delete from properties where id = ${id}`;
   },
@@ -339,8 +352,8 @@ const pgRepo: Repo = {
               values (${host.id}, ${host.email}, ${host.name}, ${host.passwordHash})`;
   },
   async track(propertyId, kind, value) {
-    /* Contador agregado por alojamiento y día. Sin identificador de dispositivo
-       ni de huésped: no hay dato personal que proteger. */
+    /* Counter aggregated per property and day. No device or guest identifier:
+       there is no personal data to protect. */
     const sql = getSql();
     await sql`
       insert into metrics (property_id, day, kind, value, count)

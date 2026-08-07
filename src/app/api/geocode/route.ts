@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { currentHostId } from "@/lib/auth";
 
-/* Geocodificación con Nominatim (OpenStreetMap): el anfitrión escribe su
-   dirección y salen las coordenadas. Así deja de existir el campo "latitud",
-   que es de los que hacen abandonar un formulario.
+/* Geocoding through Nominatim (OpenStreetMap): the host types an address and
+   the coordinates appear. That removes the "latitude" field, one of the classic
+   reasons people abandon a form halfway through.
 
-   Por qué esto y no Google Places: sin clave, sin tarjeta, sin cuota y sin
-   atarse a un proveedor de pago para resolver un problema que el mapa abierto
-   resuelve igual de bien en una dirección postal española.
+   Why this and not Google Places: no key, no credit card, no quota and no
+   lock-in to a paid provider for something the open map solves just as well for
+   a Spanish postal address.
 
-   Nominatim exige identificarse con un User-Agent real y limita a una petición
-   por segundo, por eso se hace desde el servidor y solo para anfitriones
-   autenticados: así el límite lo controlamos nosotros y no un visitante. */
+   Nominatim requires a real User-Agent and limits callers to one request per
+   second, which is why this runs server-side and only for authenticated hosts:
+   the rate limit is ours to respect, not a random visitor's to burn. */
 export async function GET(request: Request) {
   const hostId = await currentHostId();
   if (!hostId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -59,8 +59,8 @@ export async function GET(request: Request) {
       })),
     });
   } catch {
-    /* Si el servicio externo cae, el anfitrión sigue pudiendo escribir las
-       coordenadas a mano: la app no depende de esto para funcionar. */
+    /* If the external service is down the host can still type the coordinates
+       by hand: the app does not depend on this to work. */
     return NextResponse.json({ error: "No se pudo consultar el mapa" }, { status: 502 });
   }
 }

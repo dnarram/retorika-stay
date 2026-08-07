@@ -4,12 +4,13 @@ import { redirect } from "next/navigation";
 import AuthPanel from "@/components/AuthPanel";
 import { IconArrow, IconGlobe, IconKey, IconQr, IconWalk, IconWifi } from "@/components/icons";
 import { currentHostId } from "@/lib/auth";
+import { googleConfigured } from "@/lib/google";
 import { getRepo } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  /* Si ya hay sesión, la portada no aporta nada: al panel directo. */
+  /* With a session already open the landing page adds nothing: go to the dashboard. */
   if (await currentHostId()) redirect("/panel");
 
   const repo = getRepo();
@@ -81,7 +82,7 @@ export default async function Home() {
             </ul>
           </div>
 
-          <AuthPanel />
+          <AuthPanel googleEnabled={googleConfigured()} />
         </div>
       </section>
 

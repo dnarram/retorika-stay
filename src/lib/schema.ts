@@ -1,39 +1,39 @@
 import { z } from "zod";
 
 /* ---------------------------------------------------------------------------
-   Fuente única de verdad del dominio. El mismo esquema valida el formulario del
-   anfitrión (cliente), el cuerpo de las peticiones a la API (servidor) y el
-   JSONB que entra en PostgreSQL. Si cambia aquí, cambia en los tres sitios.
+   Single source of truth for the domain. The same schema validates the host's
+   form (client), the request bodies hitting the API (server) and the JSONB that
+   goes into PostgreSQL. Change it here and it changes in all three places.
 --------------------------------------------------------------------------- */
 
 export const LOCALES = ["es", "en", "fr", "pt"] as const;
 export const localeSchema = z.enum(LOCALES);
 export type Locale = (typeof LOCALES)[number];
 
-/* Categorías y tipos de teléfono son ENUMERADOS, no texto libre: el rótulo que
-   ve el huésped sale del diccionario de idiomas, así que un dato se traduce a
-   cuatro idiomas sin que el anfitrión escriba nada. */
+/* Categories and contact types are ENUMS, not free text: the label the guest
+   sees comes from the language dictionary, so one value the host picks is
+   translated into four languages without them typing anything. */
 export const PLACE_CATEGORIES = [
-  "comer",
+  "restaurant",
   "tapas",
   "cafe",
-  "ver",
-  "naturaleza",
-  "compras",
-  "noche",
-  "servicios",
+  "sights",
+  "outdoors",
+  "shopping",
+  "nightlife",
+  "services",
 ] as const;
 export const placeCategorySchema = z.enum(PLACE_CATEGORIES);
 export type PlaceCategory = (typeof PLACE_CATEGORIES)[number];
 
 export const CONTACT_KINDS = [
-  "emergencias",
-  "policia",
-  "salud",
-  "farmacia",
+  "emergency",
+  "police",
+  "health",
+  "pharmacy",
   "taxi",
-  "anfitrion",
-  "averias",
+  "host",
+  "maintenance",
 ] as const;
 export const contactKindSchema = z.enum(CONTACT_KINDS);
 export type ContactKind = (typeof CONTACT_KINDS)[number];
@@ -58,7 +58,7 @@ export const propertySchema = z.object({
   wifiSsid: z.string().max(64),
   wifiPassword: z.string().max(64),
   wifiSecurity: z.enum(["WPA", "WEP", "nopass"]).default("WPA"),
-  /* Dato sensible: nunca viaja al cliente fuera de la ventana de estancia. */
+  /* Sensitive: never sent to the client outside the booking window. */
   accessCode: z.string().max(32),
   accessCodeUpdatedAt: z.string().nullable(),
   checkinFrom: z.string().regex(/^\d{2}:\d{2}$/),
@@ -72,8 +72,9 @@ export type Property = z.infer<typeof propertySchema>;
 
 export const ruleSchema = z.object({
   text: z.string().min(2).max(160),
-  /* true = permitido, false = prohibido, null = matiz. El icono y el color se
-     derivan de aquí, no de leer el texto: el color nunca es la única señal. */
+  /* true = allowed, false = forbidden, null = nuance. Icon and colour are
+     derived from this, not from parsing the text, and colour is never the only
+     signal carrying the meaning. */
   allowed: z.boolean().nullable(),
 });
 
@@ -107,13 +108,13 @@ export const placeSchema = z.object({
   price: z.number().int().min(1).max(3).nullable(),
   url: z.string().url().nullable(),
   phone: z.string().max(32).nullable(),
-  /* La nota personal del anfitrión es lo que diferencia esta guía de un mapa:
-     se guarda por idioma y es el campo que más se traduce. */
+  /* The host's personal note is what makes this a guide rather than a map: it
+     is stored per language and is the most translated field in the app. */
   notes: z.record(localeSchema, placeNoteSchema),
 });
 export type Place = z.infer<typeof placeSchema>;
 
-/* Parciales aceptados por la API al autoguardar el editor. */
+/* Partial payloads accepted by the API while the editor autosaves. */
 export const propertyPatchSchema = propertySchema
   .omit({ id: true, hostId: true, slug: true })
   .partial();
@@ -124,21 +125,20 @@ export type PropertyPatch = z.infer<typeof propertyPatchSchema>;
 export type GuidePatch = z.infer<typeof guidePatchSchema>;
 
 /* ---------------------------------------------------------------------------
-   Estancia. Es la pieza que faltaba: hasta ahora las fechas colgaban del
-   alojamiento, así que el enlace de una guía era una credencial sin caducidad.
-   Con la estancia, cada reserva tiene su propio enlace, se puede revocar por
-   separado y el acceso deja de servirse cuando el huésped se va.
+   Booking. This was the missing piece: dates used to hang off the property, so
+   a guide link was a credential that never expired. With bookings, each stay
+   gets its own link, can be revoked on its own, and access stops being served
+   once the guest leaves.
 --------------------------------------------------------------------------- */
 export const staySchema = z.object({
   id: z.string(),
   propertyId: z.string(),
-  /* Enlace propio de la reserva, distinto del enlace de muestra del piso. */
+  /* The booking's own link, distinct from the property's listing link. */
   slug: z.string().min(6),
   guestName: z.string().max(60).nullable(),
   arrival: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   departure: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  /* Código propio de la estancia (cerraduras inteligentes). Si es null, se usa
-     el del alojamiento. */
+  /* Per-booking code, for smart locks. When null, the property code is used. */
   accessCodeOverride: z.string().max(32).nullable(),
   pin: z.string().regex(/^\d{4}$/).nullable(),
   revoked: z.boolean(),
@@ -147,9 +147,9 @@ export type Stay = z.infer<typeof staySchema>;
 
 export const stayInputSchema = staySchema.omit({ id: true, propertyId: true, slug: true, revoked: true });
 
-/* Métrica agregada por alojamiento y día. Nunca por huésped ni por dispositivo:
-   sin identificadores no hay dato personal que proteger. */
-export const METRIC_KINDS = ["apertura", "idioma", "seccion", "busqueda_sin_resultado", "llamada"] as const;
+/* Metrics aggregated per property and day. Never per guest or per device: with
+   no identifiers there is no personal data to protect. */
+export const METRIC_KINDS = ["open", "language", "section", "search_miss", "call"] as const;
 export const metricKindSchema = z.enum(METRIC_KINDS);
 export type MetricKind = (typeof METRIC_KINDS)[number];
 

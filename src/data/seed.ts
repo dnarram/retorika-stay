@@ -1,13 +1,12 @@
 import type { Guide, Locale, Place, Property, Stay } from "@/lib/schema";
 
 /* ---------------------------------------------------------------------------
-   Datos de demostración. Dos alojamientos para probar que la app es
-   multipropiedad y que el contenido no está incrustado en el código:
-     · Ronda    — guía completa y revisada en los cuatro idiomas.
-     · Madrid   — ES/EN revisados, FR/PT en borrador, para enseñar el estado
-                  real de una guía a medio traducir en el panel del anfitrión.
-   Los monumentos llevan coordenadas reales; el resto son aproximadas y los
-   teléfonos son ficticios salvo los de emergencia (112) y el 061.
+   Demo data. Two properties, to prove the app is multi-property and that
+   content is not baked into the code:
+     · Ronda  — full guide in all four languages.
+     · Madrid — ES/EN written by the host, FR/PT machine-translated.
+   Landmarks carry real coordinates; the rest are approximate, and every phone
+   number is fictional except the emergency ones (112 and 061).
 --------------------------------------------------------------------------- */
 
 export type GuideRecord = {
@@ -22,7 +21,7 @@ export const HOSTS = [
     id: "host_belen",
     email: "belen@retorika.es",
     name: "Belén",
-    /* scrypt(N=16384,r=8,p=1) de "retorika2026" — ver src/lib/auth.ts */
+    /* scrypt(N=16384,r=8,p=1) of "retorika2026" — see src/lib/auth.ts */
     passwordHash:
       "6707c91ddecc4e4a99eac7cf97a4c401:2dc5c162be5eedc5dbadfcf62c4e7619586ee7050c4b2707f6f4f68a5399c600",
   },
@@ -48,11 +47,11 @@ export const PROPERTIES: Property[] = [
     checkoutUntil: "11:00",
     accessCodeUpdatedAt: null,
     contacts: [
-      { kind: "emergencias", phone: "112" },
-      { kind: "salud", phone: "+34951065100", detail: "Hospital Comarcal de la Serranía" },
-      { kind: "farmacia", phone: "+34952871234", detail: "Calle Espinel 45" },
+      { kind: "emergency", phone: "112" },
+      { kind: "health", phone: "+34951065100", detail: "Hospital Comarcal de la Serranía" },
+      { kind: "pharmacy", phone: "+34952871234", detail: "Calle Espinel 45" },
       { kind: "taxi", phone: "+34952872316", detail: "Radio Taxi Ronda" },
-      { kind: "anfitrion", phone: "+34600111222", detail: "WhatsApp 9:00–22:00" },
+      { kind: "host", phone: "+34600111222", detail: "WhatsApp 9:00–22:00" },
     ],
     defaultLocale: "es",
     published: true,
@@ -77,12 +76,12 @@ export const PROPERTIES: Property[] = [
     checkoutUntil: "11:00",
     accessCodeUpdatedAt: null,
     contacts: [
-      { kind: "emergencias", phone: "112" },
-      { kind: "salud", phone: "061", detail: "Urgencias sanitarias" },
-      { kind: "farmacia", phone: "+34915390123", detail: "Calle Argumosa 5, 24 h" },
-      { kind: "policia", phone: "092", detail: "Policía Municipal" },
-      { kind: "anfitrion", phone: "+34600111222", detail: "WhatsApp 9:00–22:00" },
-      { kind: "averias", phone: "+34910000111", detail: "Portería del edificio" },
+      { kind: "emergency", phone: "112" },
+      { kind: "health", phone: "061", detail: "Urgencias sanitarias" },
+      { kind: "pharmacy", phone: "+34915390123", detail: "Calle Argumosa 5, 24 h" },
+      { kind: "police", phone: "092", detail: "Policía Municipal" },
+      { kind: "host", phone: "+34600111222", detail: "WhatsApp 9:00–22:00" },
+      { kind: "maintenance", phone: "+34910000111", detail: "Portería del edificio" },
     ],
     defaultLocale: "es",
     published: true,
@@ -495,9 +494,9 @@ const madridEn: Guide = {
   ],
 };
 
-/* FR y PT del piso de Madrid: traducidos con el asistente y SIN revisar. El
-   panel los marca en rojo y la guía muestra un aviso al huésped. Es el estado
-   real de una guía a medio traducir y merece verse en la demo. */
+/* FR and PT for the Madrid flat: produced by the assistant, not written by the
+   host. The guide tells the guest they are machine translations. This is what a
+   partially translated guide really looks like, so it belongs in the demo. */
 const madridFr: Guide = {
   ...madridEs,
   welcomeTitle: "Bienvenue à l'Ático Lavapiés",
@@ -553,7 +552,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_ronda_1",
     propertyId: "prop_ronda",
-    category: "ver",
+    category: "sights",
     name: "Puente Nuevo",
     lat: 36.7412,
     lng: -5.166,
@@ -587,7 +586,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_ronda_3",
     propertyId: "prop_ronda",
-    category: "comer",
+    category: "restaurant",
     name: "Restaurante Pedro Romero",
     lat: 36.7434,
     lng: -5.1666,
@@ -604,7 +603,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_ronda_4",
     propertyId: "prop_ronda",
-    category: "ver",
+    category: "sights",
     name: "Plaza de toros de la Real Maestranza",
     lat: 36.7437,
     lng: -5.1669,
@@ -621,7 +620,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_ronda_5",
     propertyId: "prop_ronda",
-    category: "naturaleza",
+    category: "outdoors",
     name: "Alameda del Tajo",
     lat: 36.7444,
     lng: -5.1678,
@@ -638,7 +637,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_ronda_6",
     propertyId: "prop_ronda",
-    category: "ver",
+    category: "sights",
     name: "Baños árabes",
     lat: 36.7393,
     lng: -5.1636,
@@ -655,7 +654,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_ronda_7",
     propertyId: "prop_ronda",
-    category: "compras",
+    category: "shopping",
     name: "Supermercado de Calle Espinel",
     lat: 36.7462,
     lng: -5.1638,
@@ -672,7 +671,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_madrid_1",
     propertyId: "prop_madrid",
-    category: "compras",
+    category: "shopping",
     name: "Mercado de Antón Martín",
     lat: 40.4127,
     lng: -3.6997,
@@ -689,7 +688,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_madrid_2",
     propertyId: "prop_madrid",
-    category: "ver",
+    category: "sights",
     name: "Museo Reina Sofía",
     lat: 40.408,
     lng: -3.6944,
@@ -706,7 +705,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_madrid_3",
     propertyId: "prop_madrid",
-    category: "comer",
+    category: "restaurant",
     name: "Taberna Antonio Sánchez",
     lat: 40.4098,
     lng: -3.702,
@@ -723,7 +722,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_madrid_4",
     propertyId: "prop_madrid",
-    category: "naturaleza",
+    category: "outdoors",
     name: "Parque del Retiro",
     lat: 40.4153,
     lng: -3.6844,
@@ -757,7 +756,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_madrid_6",
     propertyId: "prop_madrid",
-    category: "noche",
+    category: "nightlife",
     name: "Cine Doré (Filmoteca Española)",
     lat: 40.4122,
     lng: -3.6989,
@@ -774,7 +773,7 @@ export const PLACES: Place[] = [
   {
     id: "pl_madrid_7",
     propertyId: "prop_madrid",
-    category: "servicios",
+    category: "services",
     name: "Farmacia Argumosa 24 h",
     lat: 40.4077,
     lng: -3.6991,
@@ -791,10 +790,10 @@ export const PLACES: Place[] = [
 ];
 
 /* ---------------------------------------------------------------------------
-   Estancias de demostración, con fechas RELATIVAS AL DÍA EN QUE SE EJECUTA.
-   Si el revisor abre esto en septiembre, la demo sigue teniendo sentido: una
-   reserva en curso, una que aún no ha empezado y otra terminada que ya muestra
-   el modo recuerdo con el acceso cortado.
+   Demo bookings, with dates RELATIVE TO THE DAY THE SEED RUNS. If a reviewer
+   opens this in September the demo still makes sense: one booking in progress,
+   one that has not started yet, and one already finished, showing the memories
+   mode with access cut off.
 --------------------------------------------------------------------------- */
 const shift = (days: number): string => {
   const date = new Date();
@@ -822,7 +821,7 @@ export const STAYS: Stay[] = [
     arrival: shift(9),
     departure: shift(13),
     accessCodeOverride: null,
-    /* Reserva protegida con PIN: enseña que el PIN se pone por huésped. */
+    /* PIN-protected booking: shows that the PIN is set per guest. */
     pin: "2610",
     revoked: false,
   },

@@ -1,8 +1,8 @@
 type IconProps = { className?: string; size?: number };
 
-/* Catorce iconos dibujados a mano, ~2 kB en total. Una librería de iconos
-   completa habría metido cientos de kB para esto. Todos heredan currentColor y
-   llevan aria-hidden: el significado lo da el texto que los acompaña. */
+/* Fourteen hand-drawn icons, ~2 kB in total. A full icon library would have
+   pulled in hundreds of kB for this. They all inherit currentColor and carry
+   aria-hidden: the meaning is carried by the text beside them. */
 const base = (size: number) => ({
   width: size,
   height: size,

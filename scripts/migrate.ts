@@ -1,16 +1,24 @@
-/* Aplica db/schema.sql. Uso: npm run db:migrate  (requiere DATABASE_URL) */
+/* Applies db/schema.sql. Usage: npm run db:migrate (requires DATABASE_URL) */
 import { readFileSync } from "node:fs";
 import postgres from "postgres";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error("Falta DATABASE_URL. Copia .env.example a .env y rellénala.");
+  console.error("DATABASE_URL is missing. Copy .env.example to .env and fill it in.");
   process.exit(1);
 }
 
-const sql = postgres(url, { ssl: url.includes("sslmode=require") ? "require" : undefined });
+/* max: 1 pins a single connection, which is what postgres.js requires to run a
+   script containing begin/commit; .simple() switches to the simple protocol,
+   the only one that accepts several statements in one call. */
+const sql = postgres(url, {
+  ssl: url.includes("sslmode=require") ? "require" : undefined,
+  max: 1,
+});
 const ddl = readFileSync(new URL("../db/schema.sql", import.meta.url), "utf8");
 
-await sql.unsafe(ddl);
-console.log("Esquema aplicado.");
+/* .simple() usa el protocolo simple de PostgreSQL, que es el único que acepta
+   varias sentencias (y el begin/commit del fichero) en una sola llamada. */
+await sql.unsafe(ddl).simple();
+console.log("Schema applied.");
 await sql.end();

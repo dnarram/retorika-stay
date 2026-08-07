@@ -13,9 +13,9 @@ const bodySchema = z.object({
   lng: z.number().min(-180).max(180),
 });
 
-/* Guía en blanco pero no vacía: el anfitrión empieza con la estructura puesta y
-   solo tiene que rellenar. Una plantilla ahorra más fricción que cualquier
-   importación automática. */
+/* A blank guide that is not empty: the host starts with the structure already
+   in place and only has to fill it in. A good template removes more friction
+   than any automatic import would. */
 const BLANK: Guide = {
   welcomeTitle: "",
   welcomeIntro: "",
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   const property: Property = {
     id: `prop_${nanoid(10)}`,
     hostId,
-    /* Slug irreproducible: la guía es accesible por enlace, no adivinable. */
+    /* Unguessable slug: the guide is reachable by link, not by guessing. */
     slug: nanoid(8),
     ...parsed.data,
     hostName: "",
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     accessCodeUpdatedAt: null,
     checkinFrom: "15:00",
     checkoutUntil: "11:00",
-    contacts: [{ kind: "emergencias", phone: "112" }],
+    contacts: [{ kind: "emergency", phone: "112" }],
     defaultLocale: "es",
     published: false,
     pin: null,

@@ -6,6 +6,10 @@ y a quién llamar si algo va mal, en su idioma y sin instalar nada.
 
 Prueba técnica para el proceso de selección de **Retorika Academy** · David Naranjo Ramírez · agosto de 2026.
 
+> El código y sus comentarios están en inglés, que es la práctica habitual en un repositorio
+> público. La interfaz del anfitrión está en español, la guía del huésped en cuatro idiomas y esta
+> documentación en español, porque sus lectores lo son.
+
 ---
 
 ## Arrancarlo en quince segundos
@@ -29,6 +33,10 @@ npm run dev
 
 **Acceso al panel:** `belen@retorika.es` / `retorika2026`
 
+También se puede entrar con Google (OAuth 2.0 / OIDC). El botón solo aparece si están definidas
+`GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`; sin ellas, el acceso por correo y contraseña sigue
+siendo el único camino, que además es el que permite usar la cuenta de demostración.
+
 ---
 
 ## Guion de revisión de tres minutos
@@ -40,7 +48,7 @@ npm run dev
 | 3 | `/g/k3f9apx2` | **Enlace de muestra** del mismo piso: la guía entera menos lo que abre la casa. Se puede pegar en el anuncio. |
 | 4 | `/g/mv8ktp41` | Reserva **ya terminada**: la guía sigue viva, el código de entrada y la clave del WiFi ya no existen en el HTML. |
 | 5 | `/g/r5xw81nq` | Reserva futura **con PIN** (2610): sin PIN no baja ni una línea de contenido. |
-| 6 | `/g/r7d3ka92?fase=recuerdo` | Modo recuerdo: resumen del viaje y tarjeta compartible. La foto se compone en el móvil y no se sube a ningún sitio. |
+| 6 | `/g/r7d3ka92?fase=memories` | Modo recuerdo: resumen del viaje y tarjeta compartible. La foto se compone en el móvil y no se sube a ningún sitio. |
 | 7 | `/g/r7d3ka92?lang=fr` | Cuatro idiomas, con aviso de traducción automática. |
 | 8 | `/panel` | Tarjetas de alojamientos, reservas con su enlace, aviso de rotación del código, métricas anónimas y alta de alojamiento con búsqueda de coordenadas. |
 | 9 | Modo avión + recargar una guía | Sigue abriéndose: se guardó en el móvil en la primera visita. |
@@ -95,7 +103,7 @@ src/
 │  ├─ g/[slug]/          Guía del huésped: el slug resuelve reserva o alojamiento, y el
 │  │                     servidor decide idioma, fase y qué datos pueden salir
 │  ├─ panel/             Panel del anfitrión: login, listado y editor por pasos
-│  └─ api/               qr · unlock · auth (login/registro) · properties · stays ·
+│  └─ api/               qr · unlock · auth (login/registro/google) · properties · stays ·
 │                        guides · places · translate · assist · geocode · track
 ├─ lib/
 │  ├─ schema.ts          Esquema Zod: formulario, API y base de datos comparten definición
@@ -103,7 +111,8 @@ src/
 │  ├─ stay.ts            Ciclo de vida de la reserva y visibilidad del código de acceso
 │  ├─ geo.ts             Haversine, minutos a pie, enlaces a mapas
 │  ├─ completeness.ts    Completitud ponderada por lo que le importa al huésped
-│  └─ auth.ts            scrypt + JWT en cookie httpOnly
+│  ├─ auth.ts            scrypt + JWT en cookie httpOnly
+│  └─ google.ts          OAuth 2.0 / OIDC a mano, con state y nonce
 ├─ i18n/dictionaries.ts  ES · EN · FR · PT tipados (si falta una clave, no compila)
 └─ data/seed.ts          Dos alojamientos de ejemplo
 db/schema.sql            DDL de PostgreSQL comentado
@@ -157,15 +166,33 @@ límite de intentos del PIN: 401 401 401 401 401 429
 
 `npx tsc --noEmit` y `npx next build` pasan sin avisos.
 
-Dos integraciones no se pueden verificar desde el entorno de desarrollo porque llaman a servicios
-externos: la geocodificación de Nominatim y las llamadas a Groq (traducción y asistente). Ambas
-están escritas para fallar sin romper nada —el anfitrión puede seguir escribiendo las coordenadas a
-mano y los botones de IA devuelven un aviso claro— y hay que probarlas contra el despliegue real.
+### Verificado contra PostgreSQL real, no solo en modo demostración
+
+La batería se ejecuta en los dos modos. Levantar PostgreSQL 16 y pasarla contra él sacó dos fallos
+que el modo en memoria nunca habría enseñado:
+
+1. **`postgres.js` rechazaba el script de esquema** porque contiene `begin`/`commit`. Se resuelve
+   fijando `max: 1` en la conexión y usando el protocolo simple, que es el único que acepta varias
+   sentencias en una llamada.
+2. **PostgreSQL devuelve las columnas `date` como objetos `Date` de JavaScript**, no como cadenas.
+   `String(fecha).slice(0, 10)` producía `"Wed Aug 06"` en lugar de `"2026-08-06"` y rompía toda la
+   aritmética del ciclo de vida de la reserva. En memoria no se veía porque allí ya eran cadenas.
+
+El guion cubre además el camino de escritura completo —crear alojamiento, `PATCH` con `jsonb`, crear
+y borrar reserva, borrado en cascada— y se comprueba con SQL que la cascada no deja guías ni sitios
+huérfanos.
+
+Tres integraciones no se pueden verificar sin salida a internet y hay que probarlas en el despliegue
+real: la geocodificación de Nominatim, las llamadas a Groq (traducción y asistente) y el intercambio
+de código con Google. Las tres están escritas para fallar sin romper nada, y lo que sí está
+verificado es el comportamiento sin credenciales: el botón de Google no se renderiza, `/api/auth/google`
+redirige a la portada y un `state` falsificado en el callback se rechaza.
 
 ## Qué haría a continuación
 
-Por este orden: entrada con Google (OAuth 2.0 sobre la sesión JWT que ya existe), fotos en los pasos
-de entrada, sugerencia automática de sitios cercanos al crear un alojamiento, mover el control de
-intentos del PIN a la base de datos para que aguante varias instancias, y varias guías por
-alojamiento —el esquema lo admite, pero no expongo la jerarquía hasta tener un caso de uso claro:
-añadirle un nivel al anfitrión al que le prometemos sencillez hay que ganárselo.
+Por este orden: fotos en los pasos de entrada, sugerencia automática de sitios cercanos al crear un
+alojamiento, mover el control de intentos del PIN a la base de datos para que aguante varias
+instancias, pruebas unitarias con Vitest sobre `geo`, `stay` y `completeness` —lógica pura y fácil de
+fijar—, y varias guías por alojamiento: el esquema lo admite, pero no expongo la jerarquía hasta
+tener un caso de uso claro. Añadirle un nivel de complejidad al anfitrión al que le prometemos
+sencillez hay que ganárselo.

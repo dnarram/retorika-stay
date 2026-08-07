@@ -33,11 +33,11 @@ export type PropertyRow = {
 };
 
 const PHASE_LABEL: Record<StayPhase, string> = {
-  antes: "Próxima",
-  llegada: "Llega hoy",
-  estancia: "En curso",
-  salida: "Se va hoy",
-  recuerdo: "Terminada",
+  before: "Próxima",
+  arrival: "Llega hoy",
+  staying: "En curso",
+  departure: "Se va hoy",
+  memories: "Terminada",
 };
 
 export default function PanelClient({
@@ -59,9 +59,9 @@ export default function PanelClient({
     setBusy(true);
     setError(null);
 
-    /* La dirección se convierte en coordenadas antes de crear nada: el
-       anfitrión no ve nunca un campo de latitud, que es de los que hacen
-       abandonar un formulario a mitad. */
+    /* The address is turned into coordinates before anything is created: the
+       host never faces a latitude field, one of the classic reasons people
+       abandon a form halfway. */
     const geo = await fetch(`/api/geocode?q=${encodeURIComponent(`${form.address}, ${form.city}`)}`);
     const found = geo.ok ? ((await geo.json()) as { results: { lat: number; lng: number }[] }) : null;
     const first = found?.results?.[0];
@@ -241,7 +241,7 @@ export default function PanelClient({
                           className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                             stay.revoked
                               ? "bg-alert-soft text-alert-ink"
-                              : stay.phase === "recuerdo"
+                              : stay.phase === "memories"
                                 ? "bg-canvas text-muted"
                                 : "bg-ok-soft text-ok-ink"
                           }`}

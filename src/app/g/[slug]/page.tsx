@@ -10,8 +10,8 @@ import { canRevealAccess, isPhase, nightsBetween, stayPhase, type StayPhase } fr
 import GuideView, { type GuestPayload } from "./GuideView";
 import PinGate from "./PinGate";
 
-/* La guía no se indexa nunca: contiene el código de la puerta y la clave del
-   WiFi de una casa real. El X-Robots-Tag va además en next.config.ts. */
+/* Guides are never indexed: they hold the door code and Wi-Fi password of a
+   real home. The X-Robots-Tag is also set in next.config.ts. */
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 type Search = { lang?: string; fase?: string };
@@ -24,13 +24,13 @@ export default async function GuidePage(props: {
   const { lang, fase } = await props.searchParams;
   const repo = getRepo();
 
-  /* Un mismo formato de enlace, dos audiencias muy distintas:
-       · slug de estancia  → el QR de la nevera. Acceso completo, y solo durante
-                             los días de la reserva.
-       · slug de alojamiento → el enlace que el anfitrión pega en el anuncio.
-                             La guía entera MENOS lo que abre la casa.
-     Resolver primero la estancia hace que el enlace de muestra siga siendo
-     válido para siempre sin ser nunca peligroso. */
+  /* One link format, two very different audiences:
+       · booking slug  → the fridge QR. Full access, only for the days of the
+                         booking.
+       · property slug → the link the host pastes into the rental ad. The whole
+                         guide MINUS anything that opens the home.
+     Resolving the booking first is what lets the listing link stay valid
+     forever without ever being dangerous. */
   const stay: Stay | null = await repo.getStayBySlug(slug);
   const property: Property | null = stay
     ? await repo.getProperty(stay.propertyId)
@@ -38,8 +38,8 @@ export default async function GuidePage(props: {
 
   if (!property || !property.published) notFound();
 
-  /* El PIN puede fijarse por reserva o para todo el alojamiento: el de la
-     reserva manda, y así se cambia para un huésped concreto sin tocar nada más. */
+  /* The PIN can be set per booking or for the whole property: the booking one
+     wins, so it can be changed for one guest without touching anything else. */
   const pin = stay?.pin ?? property.pin;
   if (pin) {
     const jar = await cookies();
@@ -66,21 +66,21 @@ export default async function GuidePage(props: {
 
   const places = await repo.listPlaces(property.id);
 
-  /* ?fase= es un atajo de demostración: permite ver las cinco versiones de la
-     guía sin esperar a las fechas reales de una reserva. */
+  /* ?fase= is a demo shortcut: it shows all five versions of the guide without
+     waiting for a booking's real dates. */
   const demoPhase = isPhase(fase) ? (fase as StayPhase) : null;
 
-  const phase: StayPhase = demoPhase ?? (stay ? stayPhase(stay) : "estancia");
+  const phase: StayPhase = demoPhase ?? (stay ? stayPhase(stay) : "staying");
   const reveal = stay
     ? demoPhase
-      ? demoPhase !== "antes" && demoPhase !== "recuerdo"
+      ? demoPhase !== "before" && demoPhase !== "memories"
       : canRevealAccess(stay)
     : false;
 
   const origin = { lat: property.lat, lng: property.lng };
 
   const payload: GuestPayload = {
-    audience: stay ? "estancia" : "muestra",
+    audience: stay ? "booking" : "listing",
     stay: stay
       ? {
           guestName: stay.guestName,
@@ -103,16 +103,16 @@ export default async function GuidePage(props: {
       checkinFrom: property.checkinFrom,
       checkoutUntil: property.checkoutUntil,
       contacts: property.contacts,
-      /* Los dos datos que abren la casa. Fuera de la ventana de la reserva no
-         se serializan: no están ocultos, no existen en el HTML. */
+      /* The two values that open the home. Outside the booking window they are
+         not serialised: not hidden, simply absent from the HTML. */
       accessCode: reveal ? (stay?.accessCodeOverride ?? property.accessCode) : null,
       wifiPassword: reveal ? property.wifiPassword : null,
       directions: directionsUrl({ lat: property.lat, lng: property.lng }),
     },
     guide: guide.content,
-    /* Si el idioma servido no es el original del anfitrión, es traducción
-       automática y se dice. Ni el anfitrión ni el huésped tienen por qué ser
-       multilingües: pedir una revisión humana sería pedir un imposible. */
+    /* If the language served is not the host's own, it is a machine
+       translation and we say so. Neither host nor guest has any reason to be
+       multilingual: demanding a human review would be demanding the impossible. */
     autoTranslated: guide.locale !== property.defaultLocale,
     locale,
     phase,

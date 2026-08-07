@@ -1,11 +1,11 @@
--- Esquema de Retorika Stay (PostgreSQL 15+)
--- Ejecutar:  psql "$DATABASE_URL" -f db/schema.sql
+-- Retorika Stay schema (PostgreSQL 15+)
+-- Run with:  psql "$DATABASE_URL" -f db/schema.sql
 --
--- Criterio de modelado: los HECHOS son relacionales (coordenadas, categorías,
--- teléfonos: se filtran, se ordenan y se calculan) y el TEXTO multiidioma va en
--- JSONB validado con Zod antes de entrar. Normalizar cada párrafo en su fila
--- multiplicaría por cuatro las filas y por diez los JOIN sin que nunca se
--- consulte un párrafo suelto.
+-- Modelling rule: FACTS are relational (coordinates, categories, phone numbers
+-- are filtered, sorted and computed on) and multilingual TEXT goes into JSONB,
+-- validated with Zod before it lands. Normalising every paragraph into its own
+-- row would multiply rows by four and joins by ten to serve a query nobody
+-- makes: a single paragraph is never read on its own.
 
 begin;
 
@@ -20,7 +20,7 @@ create table if not exists hosts (
 create table if not exists properties (
   id             text primary key,
   host_id        text not null references hosts(id) on delete cascade,
-  -- slug irreproducible (nanoid de 8): la guía es pública pero no adivinable
+  -- unguessable slug (8-char nanoid): the guide is public but not discoverable
   slug           text not null unique,
   name           text not null,
   city           text not null,
@@ -47,9 +47,9 @@ create table if not exists properties (
 
 create index if not exists properties_host_idx on properties(host_id);
 
--- Una reserva. Es lo que convierte el enlace de la guía en una credencial con
--- fecha de caducidad: cada estancia tiene su propio slug, se revoca por
--- separado y fuera de sus fechas el servidor deja de enviar el código de acceso.
+-- A booking. This is what turns a guide link into a credential with an expiry
+-- date: each stay owns its slug, is revoked on its own, and outside its dates
+-- the server stops sending the access code.
 create table if not exists stays (
   id                   text primary key,
   property_id          text not null references properties(id) on delete cascade,
@@ -57,8 +57,8 @@ create table if not exists stays (
   guest_name           text,
   arrival              date not null,
   departure            date not null,
-  -- código propio de la estancia (cerraduras inteligentes); si es null se usa
-  -- el del alojamiento y la app avisa al anfitrión de que toca cambiarlo
+  -- per-booking code for smart locks; when null the property code is used and
+  -- the app reminds the host to rotate it once the booking ends
   access_code_override text,
   pin                  text check (pin ~ '^[0-9]{4}$'),
   revoked              boolean not null default false,
@@ -68,14 +68,14 @@ create table if not exists stays (
 
 create index if not exists stays_property_idx on stays(property_id, arrival desc);
 
--- Métricas agregadas por alojamiento y día. Deliberadamente SIN identificador
--- de huésped ni de dispositivo: así no hay dato personal que custodiar y la
--- guía sigue sin pedirle nada a quien la abre.
+-- Metrics aggregated per property and day. Deliberately WITHOUT any guest or
+-- device identifier: there is no personal data to safeguard and the guide still
+-- asks nothing of whoever opens it.
 create table if not exists metrics (
   property_id text not null references properties(id) on delete cascade,
   day         date not null default current_date,
   kind        text not null check (kind in
-                ('apertura','idioma','seccion','busqueda_sin_resultado','llamada')),
+                ('open','language','section','search_miss','call')),
   value       text not null default '',
   count       integer not null default 0,
   primary key (property_id, day, kind, value)
@@ -85,7 +85,7 @@ create table if not exists guides (
   property_id text not null references properties(id) on delete cascade,
   locale      text not null check (locale in ('es','en','fr','pt')),
   content     jsonb not null,
-  -- false = traducción asistida sin revisar; la guía avisa al huésped
+  -- false = machine translation; the guide tells the guest so
   reviewed    boolean not null default false,
   updated_at  timestamptz not null default now(),
   primary key (property_id, locale)
@@ -95,7 +95,7 @@ create table if not exists places (
   id          text primary key,
   property_id text not null references properties(id) on delete cascade,
   category    text not null check (category in
-                ('comer','tapas','cafe','ver','naturaleza','compras','noche','servicios')),
+                ('restaurant','tapas','cafe','sights','outdoors','shopping','nightlife','services')),
   name        text not null,
   lat         numeric(9,6) not null,
   lng         numeric(9,6) not null,

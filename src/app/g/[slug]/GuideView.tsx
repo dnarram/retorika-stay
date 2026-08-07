@@ -39,7 +39,7 @@ export type GuestPlace = Place & {
 };
 
 export type GuestPayload = {
-  audience: "estancia" | "muestra";
+  audience: "booking" | "listing";
   stay: { guestName: string | null; arrival: string; departure: string; nights: number } | null;
   autoTranslated: boolean;
   property: {
@@ -68,40 +68,28 @@ export type GuestPayload = {
 };
 
 type SectionId =
-  | "esencial"
-  | "casa"
-  | "normas"
-  | "sitios"
-  | "moverse"
-  | "emergencias"
-  | "salida"
+  | "essentials"
+  | "house"
+  | "rules"
+  | "places"
+  | "transport"
+  | "emergency"
+  | "checkout"
   | "faq";
 
-/* La misma información, distinto orden según el día de la estancia. Ninguna
-   sección desaparece nunca: se reordena. Ocultar información a un huésped que
-   no encuentra el contenedor de la basura es peor que hacerle bajar dos
-   pantallas. */
-const SECTION_LABEL: Record<SectionId, keyof ReturnType<typeof getDictionary>["sections"]> = {
-  esencial: "essentials",
-  casa: "house",
-  normas: "rules",
-  sitios: "places",
-  moverse: "transport",
-  emergencias: "emergency",
-  salida: "checkout",
-  faq: "faq",
-};
-
+/* Same information, different order depending on the day of the booking. No
+   section ever disappears — it moves. Hiding information from a guest who
+   cannot find the recycling bin is worse than making them scroll. */
 const ORDER: Record<StayPhase, SectionId[]> = {
-  antes: ["esencial", "moverse", "normas", "sitios", "casa", "emergencias", "salida", "faq"],
-  llegada: ["esencial", "casa", "normas", "sitios", "moverse", "emergencias", "salida", "faq"],
-  estancia: ["sitios", "casa", "esencial", "moverse", "normas", "emergencias", "salida", "faq"],
-  salida: ["salida", "esencial", "sitios", "moverse", "emergencias", "casa", "normas", "faq"],
-  recuerdo: ["sitios", "faq", "moverse", "esencial", "casa", "normas", "emergencias", "salida"],
+  before: ["essentials", "transport", "rules", "places", "house", "emergency", "checkout", "faq"],
+  arrival: ["essentials", "house", "rules", "places", "transport", "emergency", "checkout", "faq"],
+  staying: ["places", "house", "essentials", "transport", "rules", "emergency", "checkout", "faq"],
+  departure: ["checkout", "essentials", "places", "transport", "emergency", "house", "rules", "faq"],
+  memories: ["places", "faq", "transport", "essentials", "house", "rules", "emergency", "checkout"],
 };
 
-/* Un beacon que no bloquea la navegación y que se pierde sin consecuencias si
-   el huésped está sin conexión: la métrica nunca puede estorbar a la guía. */
+/* A beacon that never blocks navigation and is silently lost when the guest is
+   offline: metrics must never get in the way of the guide. */
 function track(slug: string, kind: string, value = "") {
   const body = JSON.stringify({ slug, kind, value });
   try {
@@ -111,7 +99,7 @@ function track(slug: string, kind: string, value = "") {
     }
     void fetch("/api/track", { method: "POST", body, keepalive: true });
   } catch {
-    /* sin conexión: no pasa nada */
+    /* offline: nothing to do */
   }
 }
 
@@ -127,8 +115,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   const [visited, setVisited] = useState<string[]>([]);
   const [noPrint, setNoPrint] = useState<SectionId[]>([]);
 
-  /* Registro del service worker: la guía se guarda en el móvil al primer
-     acceso, que es justo cuando el huésped todavía tiene wifi del aeropuerto. */
+  /* Service worker registration: the guide is cached on the phone on first
+     visit, which is exactly when the guest still has airport Wi-Fi. */
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -142,22 +130,22 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     if (seen) setVisited(JSON.parse(seen) as string[]);
   }, [property.slug]);
 
-  /* Analítica sin analítica: dos contadores agregados por alojamiento, sin
-     cookies, sin identificador de dispositivo y sin preguntarle nada al
-     huésped. Al anfitrión le dicen en qué idiomas llegan sus huéspedes; a
-     nosotros, nada sobre ninguna persona concreta. */
+  /* Analytics without analytics: two aggregated counters per property, no
+     cookies, no device identifier and nothing asked of the guest. They tell the
+     host which languages their guests arrive in, and tell us nothing about any
+     individual person. */
   useEffect(() => {
-    track(property.slug, "apertura");
-    track(property.slug, "idioma", data.locale);
+    track(property.slug, "open");
+    track(property.slug, "language", data.locale);
   }, [property.slug, data.locale]);
 
-  /* Lo que se busca y no aparece es la métrica más útil de todas: le dice al
-     anfitrión qué falta en su guía, con las palabras del huésped. */
+  /* Searches that return nothing are the single most useful metric: they tell
+     the host what is missing from the guide, in the guest's own words. */
   useEffect(() => {
     if (!needleRef.current) return;
     const timer = setTimeout(() => {
       if (visiblePlaces.length === 0 && visibleFaqs.length === 0) {
-        track(property.slug, "busqueda_sin_resultado", needleRef.current);
+        track(property.slug, "search_miss", needleRef.current);
       }
     }, 1500);
     return () => clearTimeout(timer);
@@ -179,14 +167,14 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   const share = async () => {
     const url = window.location.href;
     const text = `${guide.welcomeTitle} — ${property.city}`;
-    /* navigator.share abre el propio menú del móvil: WhatsApp, SMS, correo o lo
-       que el huésped tenga. Cero backend, cero proveedor de email, cero coste. */
+    /* navigator.share opens the phone's own sheet: WhatsApp, SMS, mail or
+       whatever the guest uses. No backend, no email provider, no cost. */
     if (navigator.share) {
       try {
         await navigator.share({ title: text, url });
         return;
       } catch {
-        /* el usuario canceló: no es un error */
+        /* the user cancelled: not an error */
       }
     }
     await navigator.clipboard.writeText(url).catch(() => {});
@@ -232,8 +220,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     [places, visited],
   );
 
-  /* Kilómetros aproximados: ida y vuelta a cada sitio marcado. Es una
-     estimación y no pretende ser otra cosa. */
+  /* Rough kilometres: there and back for each place marked as visited. It is
+     an estimate and does not pretend to be anything else. */
   const kmWalked = useMemo(
     () => (visitedPlaces.reduce((sum, place) => sum + place.meters * 2, 0) / 1000).toFixed(1),
     [visitedPlaces],
@@ -253,8 +241,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   )}`;
 
   const sections: Record<SectionId, React.ReactNode> = {
-    esencial: (
-      <Section id="esencial" title={t.sections.essentials} key="esencial">
+    essentials: (
+      <Section id="essentials" title={t.sections.essentials} key="essentials">
         <Card>
           <Row icon={<IconPin size={18} />} label={t.labels.address} value={property.address} />
           <a
@@ -271,7 +259,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           </div>
         </Card>
 
-        <Card id="entrada">
+        <Card id="entry">
           <h3 className="font-display text-base font-semibold">{t.quick.access}</h3>
           <ol className="mt-3 space-y-2 text-sm">
             {guide.arrivalSteps.map((step, index) => (
@@ -343,7 +331,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           {!property.wifiPassword ? (
             <p className="mt-3 flex items-center gap-2 text-sm text-muted">
               <IconInfo size={16} />
-              {data.audience === "muestra" ? t.showcase : t.expired}
+              {data.audience === "listing" ? t.showcase : t.expired}
             </p>
           ) : null}
           <div className={property.wifiPassword ? "mt-4 flex flex-wrap gap-2 no-print" : "hidden"}>
@@ -375,8 +363,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </Section>
     ),
 
-    casa: (
-      <Section id="casa" title={t.sections.house} key="casa">
+    house: (
+      <Section id="house" title={t.sections.house} key="house">
         <Card>
           {guide.house.map((item) => (
             <details key={item.title} className="border-b border-line py-3 last:border-0 print-block">
@@ -393,8 +381,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </Section>
     ),
 
-    normas: (
-      <Section id="normas" title={t.sections.rules} key="normas">
+    rules: (
+      <Section id="rules" title={t.sections.rules} key="rules">
         <Card>
           <ul className="space-y-3">
             {guide.rules.map((rule) => {
@@ -406,8 +394,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                     : { chip: "bg-brand-soft text-brand-ink", label: t.rules.note, icon: <IconInfo size={14} /> };
               return (
                 <li key={rule.text} className="flex flex-wrap items-start gap-3 text-sm">
-                  {/* El estado se dice con texto e icono, no solo con color:
-                      un daltónico tiene que poder leer la norma igual. */}
+                  {/* State is carried by text and icon, not colour alone: a
+                      colour-blind guest must read the rule just as easily. */}
                   <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${style.chip}`}>
                     {style.icon}
                     {style.label}
@@ -421,8 +409,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </Section>
     ),
 
-    sitios: (
-      <Section id="sitios" title={t.sections.places} key="sitios">
+    places: (
+      <Section id="places" title={t.sections.places} key="places">
         <div className="no-print -mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
           <Chip active={category === "todas"} onClick={() => setCategory("todas")}>
             {t.actions.seeAll}
@@ -434,7 +422,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           ))}
         </div>
 
-        <div id="mapa" className="no-print mt-3 h-72 overflow-hidden rounded-xl border border-line">
+        <div id="map" className="no-print mt-3 h-72 overflow-hidden rounded-xl border border-line">
           <PlacesMap
             center={{ lat: property.lat, lng: property.lng }}
             propertyName={property.name}
@@ -491,8 +479,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                       <IconGlobe size={14} /> {t.actions.website}
                     </a>
                   ) : null}
-                  {/* El "visitado" vive solo en el móvil del huésped. Nadie
-                      más lo ve, y es lo que alimenta el resumen del viaje. */}
+                  {/* "Visited" lives only on the guest's phone. Nobody else
+                      sees it, and it is what feeds the trip summary. */}
                   <button
                     type="button"
                     onClick={() => toggleVisited(place.id)}
@@ -519,8 +507,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </Section>
     ),
 
-    moverse: (
-      <Section id="moverse" title={t.sections.transport} key="moverse">
+    transport: (
+      <Section id="transport" title={t.sections.transport} key="transport">
         <Card>
           {guide.transport.map((item) => (
             <div key={item.title} className="border-b border-line py-3 last:border-0">
@@ -532,8 +520,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </Section>
     ),
 
-    emergencias: (
-      <Section id="emergencias" title={t.sections.emergency} key="emergencias">
+    emergency: (
+      <Section id="emergency" title={t.sections.emergency} key="emergency">
         <Card>
           <p className="flex gap-2 rounded-xl bg-alert-soft p-3 text-sm text-alert-ink">
             <IconAlert size={18} />
@@ -548,9 +536,9 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 </div>
                 <a
                   href={`tel:${contact.phone}`}
-                  onClick={() => track(property.slug, "llamada", contact.kind)}
+                  onClick={() => track(property.slug, "call", contact.kind)}
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${
-                    contact.kind === "emergencias"
+                    contact.kind === "emergency"
                       ? "bg-alert text-white"
                       : "ring-1 ring-brand-line text-brand-deep"
                   }`}
@@ -565,8 +553,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </Section>
     ),
 
-    salida: (
-      <Section id="salida" title={t.sections.checkout} key="salida">
+    checkout: (
+      <Section id="checkout" title={t.sections.checkout} key="checkout">
         <Card>
           <p className="text-sm text-muted">
             {t.labels.checkout} <span className="font-medium text-ink">{property.checkoutUntil}</span>
@@ -628,21 +616,21 @@ export default function GuideView({ data }: { data: GuestPayload }) {
 
           <nav aria-label={t.brand} className="mt-4 grid grid-cols-4 gap-2 no-print">
             <QuickLink href="#wifi" icon={<IconWifi size={18} />} label={t.quick.wifi} />
-            <QuickLink href="#entrada" icon={<IconKey size={18} />} label={t.quick.access} />
-            <QuickLink href="#emergencias" icon={<IconAlert size={18} />} label={t.quick.help} accent />
-            <QuickLink href="#mapa" icon={<IconMap size={18} />} label={t.quick.map} />
+            <QuickLink href="#entry" icon={<IconKey size={18} />} label={t.quick.access} />
+            <QuickLink href="#emergency" icon={<IconAlert size={18} />} label={t.quick.help} accent />
+            <QuickLink href="#map" icon={<IconMap size={18} />} label={t.quick.map} />
           </nav>
         </div>
       </header>
 
       <main id="contenido" className="mx-auto max-w-2xl px-5">
-        {data.audience === "muestra" ? (
+        {data.audience === "listing" ? (
           <p className="mt-4 flex items-start gap-2 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand-ink">
             <IconInfo size={16} /> {t.showcase}
           </p>
         ) : null}
 
-        {data.audience === "estancia" && data.phase === "recuerdo" ? (
+        {data.audience === "booking" && data.phase === "memories" ? (
           <p className="mt-4 flex items-start gap-2 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand-ink">
             <IconInfo size={16} /> {t.expired}
           </p>
@@ -664,10 +652,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           />
         </div>
 
-        {data.phase === "recuerdo" && data.stay ? (
+        {data.phase === "memories" && data.stay ? (
           <section className="mt-8 rounded-card bg-brand-ink p-6 text-white">
-            <h2 className="font-display text-lg font-semibold">{t.phase.recuerdo}</h2>
-            <p className="mt-1 text-sm text-white/70">{t.phaseHint.recuerdo}</p>
+            <h2 className="font-display text-lg font-semibold">{t.phase.memories}</h2>
+            <p className="mt-1 text-sm text-white/70">{t.phaseHint.memories}</p>
             <dl className="mt-5 grid grid-cols-3 gap-3 text-center">
               {[
                 { value: String(visitedPlaces.length), label: t.tripPlaces },
@@ -709,9 +697,9 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 <IconPrint size={16} /> {t.printPick}
               </span>
             </summary>
-            {/* Imprimir la guía entera es útil para la carpeta de la casa;
-                imprimir solo tres secciones es lo que de verdad hace un huésped
-                que se lleva un papel en el bolsillo. */}
+            {/* Printing the whole guide suits the folder left in the flat;
+                printing three sections is what a guest who puts a sheet of
+                paper in their pocket actually does. */}
             <div className="mt-3 flex flex-wrap gap-2">
               {ORDER[data.phase].map((id) => (
                 <button
@@ -727,7 +715,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                     noPrint.includes(id) ? "text-muted ring-1 ring-line" : "bg-brand text-white"
                   }`}
                 >
-                  {t.sections[SECTION_LABEL[id]]}
+                  {t.sections[id]}
                 </button>
               ))}
             </div>
@@ -759,7 +747,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   );
 }
 
-/* -------------------------------- piezas ---------------------------------- */
+/* --------------------------------- pieces --------------------------------- */
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
@@ -868,11 +856,11 @@ function LanguageSwitcher({ current }: { current: Locale }) {
   );
 }
 
-/* Selector visible solo cuando se entra con ?fase=: permite ver en treinta
-   segundos las cuatro versiones de la guía sin manipular fechas. */
+/* Only rendered when the URL carries ?fase=: it lets a reviewer see all four
+   versions of the guide in thirty seconds without editing any dates. */
 function PhasePreview({ phase, locale }: { phase: StayPhase; locale: Locale }) {
   const t = getDictionary(locale);
-  const phases: StayPhase[] = ["antes", "llegada", "estancia", "salida"];
+  const phases: StayPhase[] = ["before", "arrival", "staying", "departure"];
   return (
     <aside className="no-print mt-10 rounded-card border border-dashed border-brand-line bg-brand-soft p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-brand-ink">

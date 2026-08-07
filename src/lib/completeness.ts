@@ -1,10 +1,9 @@
 import type { GuideRecord } from "@/data/seed";
 import { LOCALES, type Place, type Property } from "./schema";
 
-/* El porcentaje de completitud no es una barra decorativa: está ponderado por
-   lo que de verdad le hace falta al huésped. Que falte el código de acceso
-   cuesta 18 puntos; que falten las preguntas frecuentes, 4. Y cada punto que
-   falta se traduce en una frase que dice exactamente qué hacer. */
+/* The completion percentage is not a decorative bar: it is weighted by what
+   the guest actually needs. A missing access code costs 18 points; missing FAQs
+   cost 4. Every missing point maps to a sentence telling the host what to do. */
 
 export type Check = {
   key: string;
@@ -98,9 +97,10 @@ export function completeness(
       key: "i18n",
       label: "Idiomas disponibles",
       weight: 2,
-      /* No se le pide al anfitrión que "revise" el francés: si no lo habla, es
-         una tarea imposible y solo le ensucia el panel. Basta con que la
-         traducción exista; la guía avisa al huésped de que es automática. */
+      /* We never ask the host to "review" the French version: if they do not
+         speak it, that is an impossible task and a permanent chore in their
+         dashboard. It is enough that the translation exists — the guide tells
+         the guest it is machine-translated. */
       done: guides.length === LOCALES.length,
       hint: "Al publicar se generan los cuatro idiomas automáticamente.",
       step: 7,

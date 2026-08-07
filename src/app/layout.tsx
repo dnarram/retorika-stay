@@ -21,9 +21,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <head>
-        {/* Fuentes por enlace y no con next/font: la guía se sirve también desde
-            el service worker sin conexión, así que la pila de reserva del
-            sistema tiene que ser suficiente por sí sola. */}
+        {/* Fonts loaded via <link> rather than next/font: the guide is also
+            served offline by the service worker, so the system fallback stack
+            has to be good enough on its own. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link

@@ -1,7 +1,7 @@
 import postgres from "postgres";
 
-/* Una sola conexión reutilizada entre recargas en desarrollo: sin esto, cada
-   hot reload abre un pool nuevo y PostgreSQL acaba rechazando conexiones. */
+/* A single connection reused across hot reloads in development: without this,
+   every reload opens a new pool and PostgreSQL eventually refuses connections. */
 const globalForDb = globalThis as unknown as { __sql?: ReturnType<typeof postgres> };
 
 export const hasDatabase = Boolean(process.env.DATABASE_URL);

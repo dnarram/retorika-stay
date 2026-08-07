@@ -1,7 +1,7 @@
 export { IconArrow, IconCheck, IconCross, IconInfo, IconQr } from "@/components/icons";
 
-/* Único icono que solo usa el panel: no tiene sentido cargarlo en la guía del
-   huésped, que es la pantalla que hay que mantener ligera. */
+/* The only icon used exclusively by the dashboard: no reason to ship it in the
+   guest guide, which is the screen that has to stay light. */
 export const IconTrash = ({ size = 20, className }: { size?: number; className?: string }) => (
   <svg
     width={size}

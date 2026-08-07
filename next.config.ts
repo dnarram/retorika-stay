@@ -5,8 +5,9 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Las guias contienen datos sensibles del alojamiento (codigo de acceso,
-        // clave WiFi): fuera de buscadores y sin filtrar el referer a terceros.
+        // Guides carry sensitive data about a real home (access code, Wi-Fi
+        // password): keep them out of search engines and do not leak the
+        // referrer to third parties.
         source: "/g/:path*",
         headers: [
           { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },

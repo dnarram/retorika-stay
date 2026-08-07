@@ -68,8 +68,8 @@ export default function Editor({
     [property, guides, places],
   );
 
-  /* Autoguardado con rebote: escribir no debe disparar una petición por tecla,
-     pero tampoco quiero un botón de guardar que el anfitrión olvide pulsar. */
+  /* Debounced autosave: typing must not fire one request per keystroke, but a
+     save button the host forgets to press is worse. */
   const persist = useCallback(
     (nextProperty: Property, nextGuide: GuideRecord | undefined) => {
       if (timer.current) clearTimeout(timer.current);
@@ -155,7 +155,7 @@ export default function Editor({
       body: JSON.stringify({
         propertyId: property.id,
         place: {
-          category: "comer" as PlaceCategory,
+          category: "restaurant" as PlaceCategory,
           name: "Sitio nuevo",
           lat: property.lat,
           lng: property.lng,
@@ -177,8 +177,8 @@ export default function Editor({
     await fetch(`/api/places/${id}`, { method: "DELETE" });
   }
 
-  /* Escribe la dirección, salen las coordenadas. El anfitrión no vuelve a ver
-     un campo de latitud en su vida. */
+  /* Type the address, get the coordinates. The host never sees a latitude field
+     again. */
   async function locate() {
     setGeo("Buscando…");
     const response = await fetch(
@@ -199,9 +199,9 @@ export default function Editor({
     setGeo(results[0].label);
   }
 
-  /* El asistente ORDENA lo que el anfitrión ha escrito; no añade hechos. La
-     sugerencia se muestra para que él la acepte o la descarte: nunca se guarda
-     sola. */
+  /* The assistant REORGANISES what the host wrote; it never adds facts. The
+     suggestion is shown for them to accept or discard, and is never saved on
+     its own. */
   async function suggest(task: "pasos" | "normas" | "nota" | "pulir", input: string) {
     setAssist("Pensando…");
     const response = await fetch("/api/assist", {
@@ -619,7 +619,7 @@ export default function Editor({
                         }}
                         className="rounded-xl border border-line px-3 py-2 text-sm"
                       >
-                        {["emergencias", "policia", "salud", "farmacia", "taxi", "anfitrion", "averias"].map((kind) => (
+                        {["emergency", "police", "health", "pharmacy", "taxi", "host", "maintenance"].map((kind) => (
                           <option key={kind} value={kind}>
                             {kind}
                           </option>
@@ -660,7 +660,7 @@ export default function Editor({
                 <button
                   type="button"
                   onClick={() =>
-                    patchProperty({ contacts: [...property.contacts, { kind: "anfitrion", phone: "" }] })
+                    patchProperty({ contacts: [...property.contacts, { kind: "host", phone: "" }] })
                   }
                   className="mt-3 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
                 >
@@ -913,7 +913,7 @@ export default function Editor({
   );
 }
 
-/* --------------------------- piezas de formulario -------------------------- */
+/* ----------------------------- form primitives ---------------------------- */
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (

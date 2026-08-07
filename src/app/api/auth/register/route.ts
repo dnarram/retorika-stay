@@ -7,8 +7,8 @@ import { getRepo } from "@/lib/repo";
 const bodySchema = z.object({
   name: z.string().min(2).max(60),
   email: z.string().email(),
-  /* Ocho caracteres mínimo. Sin exigencias de símbolos raros: obligan a la
-     gente a escribir la clave en un pósit, que es peor que una clave larga. */
+  /* Eight characters minimum, with no symbol requirements: those push people to
+     write the password on a sticky note, which is worse than a long password. */
   password: z.string().min(8).max(200),
 });
 

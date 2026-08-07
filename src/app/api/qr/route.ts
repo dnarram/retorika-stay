@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
 
-/* QR generado en el servidor y devuelto como SVG: pesa menos que un PNG, se
-   imprime nítido a cualquier tamaño y no obliga a cargar una librería de QR en
-   el navegador del huésped. */
+/* QR generated server-side and returned as SVG: smaller than a PNG, sharp at
+   any print size, and it keeps a QR library out of the guest's browser. */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const data = searchParams.get("data");

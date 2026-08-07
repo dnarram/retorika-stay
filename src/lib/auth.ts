@@ -2,11 +2,11 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 
-/* Autenticación mínima y correcta, sin dependencias de terceros:
-   · scrypt para el hash (viene en Node, es resistente a GPU y no arrastra las
-     dependencias nativas de bcrypt, que complican el despliegue serverless).
-   · JWT firmado en cookie httpOnly + sameSite=lax: no accesible desde
-     JavaScript, no viaja en peticiones entre sitios. */
+/* Minimal but correct authentication, with no third-party dependencies:
+   · scrypt for hashing — ships with Node, is GPU-resistant and avoids bcrypt's
+     native build step, which complicates serverless deployment.
+   · Signed JWT in an httpOnly, sameSite=lax cookie: unreachable from
+     JavaScript and never sent on cross-site requests. */
 
 const SESSION_COOKIE = "retorika_host";
 const SESSION_TTL = "7d";
@@ -65,8 +65,8 @@ export async function currentHostId(): Promise<string | null> {
   }
 }
 
-/* Puerta del PIN de la guía: cookie por alojamiento, firmada con el mismo
-   secreto para que no se pueda falsificar escribiéndola a mano. */
+/* Guide PIN gate: one cookie per guide, signed with the same secret so it
+   cannot be forged by hand. */
 export function guidePinCookie(slug: string): string {
   return `guide_pin_${slug}`;
 }

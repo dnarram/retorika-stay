@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { guidePinCookie, issuePinToken } from "@/lib/auth";
 import { getRepo } from "@/lib/repo";
 
-/* Un PIN de cuatro cifras son diez mil combinaciones: sin freno, un script las
-   prueba en minutos. Cinco intentos por IP y alojamiento cada diez minutos lo
-   convierten en inviable. En memoria es suficiente aquí; con varias instancias
-   habría que moverlo a Redis o a la base de datos, y así está anotado. */
+/* A four-digit PIN is ten thousand combinations: unthrottled, a script works
+   through them in minutes. Five attempts per IP and guide every ten minutes
+   makes that impractical. In-memory is enough here; with several instances this
+   needs to move to Redis or the database, which is noted in DECISIONS. */
 const attempts = new Map<string, { count: number; until: number }>();
 const LIMIT = 5;
 const WINDOW_MS = 10 * 60 * 1000;

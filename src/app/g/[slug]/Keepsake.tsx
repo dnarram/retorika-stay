@@ -4,13 +4,12 @@ import { useRef, useState } from "react";
 import { IconArrow } from "@/components/icons";
 
 /* ---------------------------------------------------------------------------
-   Tarjeta de recuerdo.
+   Trip keepsake card.
 
-   La foto que elige el huésped NUNCA sale de su móvil: se dibuja en un canvas
-   local y se descarga desde ahí. Sin subida, sin almacenamiento, sin coste y
-   sin un solo problema de protección de datos. Es la única forma honesta de
-   ofrecer algo "compartible" en una app que presume de no pedirle nada a quien
-   la abre.
+   The photo the guest picks NEVER leaves their phone: it is drawn onto a local
+   canvas and downloaded from there. No upload, no storage, no cost and not one
+   data-protection problem. It is the only honest way to offer something
+   shareable in an app that prides itself on asking nothing of whoever opens it.
 --------------------------------------------------------------------------- */
 
 export default function Keepsake({
@@ -40,8 +39,8 @@ export default function Keepsake({
       const W = (canvas.width = 1080);
       const H = (canvas.height = 1350);
 
-      /* La foto se recorta al centro manteniendo proporción: nadie quiere su
-         recuerdo deformado. */
+      /* The photo is centre-cropped with its aspect ratio preserved: nobody
+         wants a stretched memory. */
       const scale = Math.max(W / image.width, (H - 260) / image.height);
       const w = image.width * scale;
       const h = image.height * scale;

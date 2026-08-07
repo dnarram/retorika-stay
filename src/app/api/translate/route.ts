@@ -6,18 +6,18 @@ import { LOCALES, guideSchema, localeSchema } from "@/lib/schema";
 import { LOCALE_NAMES } from "@/i18n/dictionaries";
 
 /* ---------------------------------------------------------------------------
-   Traducción asistida. Dos decisiones deliberadas:
+   Assisted translation. Two deliberate decisions:
 
-   1. La IA traduce, no redacta. Nunca inventa contenido que el anfitrión no
-      haya escrito: el prompt lo prohíbe y el resultado se valida contra el
-      mismo esquema Zod que el formulario, así que una respuesta con campos de
-      más o de menos se rechaza entera.
-   2. Lo traducido entra como BORRADOR (reviewed = false). La guía avisa al
-      huésped y el panel lo marca en rojo hasta que una persona lo repasa. Una
-      traducción automática sin revisar no debe pasar por buena en la casa de
-      nadie.
+   1. The model translates, it does not write. It never invents content the host
+      did not write: the prompt forbids it and the result is validated against
+      the same Zod schema the form uses, so a response with extra or missing
+      fields is rejected in full.
+   2. Translations are stored with reviewed = false and the guide tells the
+      guest the text is machine-translated. We do not ask the host to review a
+      language they do not speak — that would be an impossible, permanent chore.
 
-   Sin GROQ_API_KEY la app funciona igual: solo se apaga este botón.
+   Without GROQ_API_KEY the app works exactly the same; only this button
+   switches off.
 --------------------------------------------------------------------------- */
 
 const bodySchema = z.object({
@@ -93,8 +93,8 @@ export async function POST(request: Request) {
 
   const candidate = guideSchema.safeParse(JSON.parse(raw));
   if (!candidate.success) {
-    /* Si el modelo se sale del esquema no se guarda nada: mejor un error claro
-       que una guía a medio traducir en la casa de un huésped. */
+    /* If the model strays from the schema nothing is saved: a clear error beats
+       a half-translated guide in someone's home. */
     return NextResponse.json(
       { error: "La traducción no respeta la estructura de la guía", detail: candidate.error.flatten() },
       { status: 422 },

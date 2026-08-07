@@ -4,10 +4,10 @@ import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 import type { GuestPlace } from "./GuideView";
 
-/* Leaflet a pelo, sin react-leaflet: son cincuenta líneas y evita atarse a una
-   capa de compatibilidad que se rompe en cada versión mayor de React. Los
-   iconos son divIcon (HTML), así que no hay que servir los PNG de Leaflet ni
-   parchear la ruta por defecto de las imágenes, que es el fallo clásico. */
+/* Plain Leaflet, no react-leaflet: it is fifty lines and avoids a compatibility
+   layer that breaks on every major React release. Markers are divIcons (HTML),
+   so there is no need to serve Leaflet's PNGs or patch its default image path —
+   the classic first bug of any Leaflet integration. */
 export default function PlacesMap({
   center,
   places,
@@ -65,8 +65,8 @@ export default function PlacesMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Redibuja solo los marcadores cuando cambia el filtro de categoría: el mapa
-     y las teselas no se vuelven a crear. */
+  /* Only the markers are redrawn when the category filter changes: the map and
+     its tiles are never recreated. */
   useEffect(() => {
     if (!mapRef.current) return;
     import("leaflet").then(({ default: L }) => draw(L));

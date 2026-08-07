@@ -26,8 +26,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "La salida no puede ser anterior a la llegada" }, { status: 422 });
   }
 
-  /* Cada reserva estrena enlace. Ese es todo el truco: revocar una no afecta a
-     las demás, y un enlace filtrado se agota con su propia reserva. */
+  /* Every booking gets a fresh link. That is the whole trick: revoking one does
+     not affect the others, and a leaked link expires with its own booking. */
   const existing = body?.id ? (await repo.listStays(property.id)).find((s) => s.id === body.id) : null;
   const stay = {
     ...parsed.data,

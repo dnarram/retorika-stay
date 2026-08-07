@@ -29,7 +29,7 @@ check "estancia futura con PIN: sin contenido (0)"  "$(curl -s $BASE/g/r5xw81nq 
 
 echo "── idioma y fases ─────────────────────────────────────────────"
 check "guía en francés"                  "$(curl -s "$BASE/g/r7d3ka92?lang=fr" | grep -c 'Bienvenue')"
-check "fase recuerdo con resumen"        "$(curl -s "$BASE/g/r7d3ka92?fase=recuerdo" | grep -c 'Tu viaje')"
+check "fase recuerdo con resumen"        "$(curl -s "$BASE/g/r7d3ka92?fase=memories" | grep -c 'Tu viaje')"
 
 echo "── sesión y autorización ──────────────────────────────────────"
 check "PATCH sin sesión (401)"           "$(code -X PATCH $BASE/api/properties/prop_ronda -H "$J" -d '{"name":"x"}')"
@@ -44,11 +44,25 @@ check "registro con clave corta (422)"   "$(code -X POST $BASE/api/auth/register
 check "registro correo repetido (409)"   "$(code -X POST $BASE/api/auth/register -H "$J" -d '{"name":"Ana","email":"belen@retorika.es","password":"clavelarga1"}')"
 check "reserva con salida anterior (422)" "$(code -b /tmp/host.txt -X POST $BASE/api/stays -H "$J" -d '{"propertyId":"prop_ronda","stay":{"guestName":"X","arrival":"2026-09-10","departure":"2026-09-01","accessCodeOverride":null,"pin":null}}')"
 
+echo "── escritura completa (ejercita el camino de PostgreSQL) ──────"
+NEW=$(curl -s -b /tmp/host.txt -X POST $BASE/api/properties -H "$J" \
+  -d '{"name":"Piso de prueba","city":"Ronda","address":"Calle Falsa 1","lat":36.74,"lng":-5.16}')
+PID=$(echo "$NEW" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+check "crear alojamiento"                "$([ -n "$PID" ] && echo ok || echo FALLO)"
+check "PATCH con contactos (jsonb)"      "$(code -b /tmp/host.txt -X PATCH $BASE/api/properties/$PID -H "$J" -d '{"contacts":[{"kind":"emergency","phone":"112"},{"kind":"taxi","phone":"+34952872316"}],"accessCode":"1234"}')"
+STAY=$(curl -s -b /tmp/host.txt -X POST $BASE/api/stays -H "$J" \
+  -d "{\"propertyId\":\"$PID\",\"stay\":{\"guestName\":\"Prueba\",\"arrival\":\"2026-09-01\",\"departure\":\"2026-09-05\",\"accessCodeOverride\":null,\"pin\":null}}")
+SID=$(echo "$STAY" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+check "crear reserva"                    "$([ -n "$SID" ] && echo ok || echo FALLO)"
+check "borrar reserva"                   "$(code -b /tmp/host.txt -X DELETE $BASE/api/stays/$SID)"
+check "borrar alojamiento en cascada"    "$(code -b /tmp/host.txt -X DELETE $BASE/api/properties/$PID)"
+check "el alojamiento borrado ya no está (404)" "$(code $BASE/g/$PID)"
+
 echo "── servicios ──────────────────────────────────────────────────"
 check "asistente sin clave (501)"        "$(code -b /tmp/host.txt -X POST $BASE/api/assist -H "$J" -d '{"task":"pasos","input":"caja de llaves gris"}')"
 check "traducir sin clave (501)"         "$(code -b /tmp/host.txt -X POST $BASE/api/translate -H "$J" -d '{"propertyId":"prop_ronda","from":"es","to":"fr"}')"
-check "métrica anónima (204)"            "$(code -X POST $BASE/api/track -H "$J" -d '{"slug":"k3f9apx2","kind":"apertura","value":""}')"
-check "métrica con tipo inventado (400)" "$(code -X POST $BASE/api/track -H "$J" -d '{"slug":"k3f9apx2","kind":"espiar","value":""}')"
+check "métrica anónima (204)"            "$(code -X POST $BASE/api/track -H "$J" -d '{"slug":"k3f9apx2","kind":"open","value":""}')"
+check "métrica con tipo inventado (400)" "$(code -X POST $BASE/api/track -H "$J" -d '{"slug":"k3f9apx2","kind":"spy","value":""}')"
 check "cabecera noindex"                 "$(curl -sI $BASE/g/k3f9apx2 | grep -ci 'x-robots-tag')"
 
 printf '%-52s ' "límite de intentos del PIN"

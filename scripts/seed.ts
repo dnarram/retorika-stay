@@ -1,10 +1,10 @@
-/* Carga los datos de demostración. Uso: npm run db:seed */
+/* Loads the demo data. Usage: npm run db:seed */
 import postgres from "postgres";
 import { GUIDES, HOSTS, PLACES, PROPERTIES, STAYS } from "../src/data/seed.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error("Falta DATABASE_URL.");
+  console.error("DATABASE_URL is missing.");
   process.exit(1);
 }
 
@@ -50,5 +50,5 @@ await sql.begin(async (tx) => {
   }
 });
 
-console.log(`Sembrados ${PROPERTIES.length} alojamientos, ${STAYS.length} estancias, ${GUIDES.length} guías y ${PLACES.length} sitios.`);
+console.log(`Seeded ${PROPERTIES.length} properties, ${STAYS.length} bookings, ${GUIDES.length} guides and ${PLACES.length} places.`);
 await sql.end();

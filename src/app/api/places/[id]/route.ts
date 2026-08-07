@@ -9,8 +9,8 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   const { id } = await context.params;
   const repo = getRepo();
 
-  /* Se comprueba que el sitio cuelga de un alojamiento del anfitrión antes de
-     borrar nada. */
+  /* We verify the place belongs to one of this host's properties before
+     deleting anything. */
   const properties = await repo.listProperties(hostId);
   for (const property of properties) {
     const places = await repo.listPlaces(property.id);

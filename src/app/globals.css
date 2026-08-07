@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Sistema de diseño — derivado de la identidad de Retorika Academy.
-   Azul #156fe7, azul profundo #105cb1, azul del logo #12517d, fucsia #ff3a72,
-   verde #03d26e, blanco #ffffff. El fucsia y el verde son SEMÁNTICOS
-   (urgencia / confirmación), nunca decorativos: así el color informa.
+   Design system — derived from the Retorika Academy identity.
+   Blue #156fe7, deep blue #105cb1, logo blue #12517d, fuchsia #ff3a72,
+   green #03d26e, white #ffffff. Fuchsia and green are SEMANTIC (urgency and
+   confirmation), never decorative, so colour always carries information.
 --------------------------------------------------------------------------- */
 @theme {
   --color-brand: #156fe7;
@@ -51,14 +51,14 @@ h3,
   letter-spacing: -0.01em;
 }
 
-/* Foco visible y consistente: requisito de accesibilidad, no decoración. */
+/* Visible, consistent focus ring: an accessibility requirement, not styling. */
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 3px solid var(--color-brand);
   outline-offset: 2px;
   border-radius: 6px;
 }
 
-/* Salto al contenido para teclado y lectores de pantalla. */
+/* Skip link for keyboard and screen-reader users. */
 .skip-link {
   position: absolute;
   left: -9999px;
@@ -82,7 +82,7 @@ h3,
   }
 }
 
-/* La guía se imprime: muchos anfitriones dejan una carpeta física en la casa. */
+/* Guides get printed: many hosts leave a paper folder in the flat. */
 @media print {
   .no-print {
     display: none !important;
@@ -96,7 +96,7 @@ h3,
   }
 }
 
-/* Leaflet: el contenedor necesita altura explícita y z-index contenido. */
+/* Leaflet: the container needs an explicit height and a contained z-index. */
 .leaflet-container {
   height: 100%;
   width: 100%;
@@ -105,7 +105,7 @@ h3,
   font-family: var(--font-sans);
 }
 
-/* Secciones que el huésped ha decidido no llevarse en papel. */
+/* Sections the guest chose not to take away on paper. */
 @media print {
   .print-hidden {
     display: none !important;
