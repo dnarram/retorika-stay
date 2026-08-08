@@ -1,5 +1,6 @@
 /* Loads the demo data. Usage: npm run db:seed */
 import postgres from "postgres";
+import { requiresTls } from "../src/lib/db.ts";
 import { GUIDES, HOSTS, PLACES, PROPERTIES, STAYS } from "../src/data/seed.ts";
 
 const url = process.env.DATABASE_URL;
@@ -8,7 +9,7 @@ if (!url) {
   process.exit(1);
 }
 
-const sql = postgres(url, { ssl: url.includes("sslmode=require") ? "require" : undefined });
+const sql = postgres(url, { ssl: requiresTls(url) ? "require" : undefined });
 
 await sql.begin(async (tx) => {
   for (const host of HOSTS) {

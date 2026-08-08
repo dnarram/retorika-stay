@@ -9,8 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "smoke": "bash scripts/smoke.sh",
-    "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
-    "db:seed": "node --experimental-strip-types scripts/seed.ts"
+    "db:migrate": "node --env-file-if-exists=.env --experimental-strip-types scripts/migrate.ts",
+    "db:seed": "node --env-file-if-exists=.env --experimental-strip-types scripts/seed.ts"
   },
   "dependencies": {
     "jose": "5.9.6",
