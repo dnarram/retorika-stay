@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { resolveLocale } from "@/i18n/dictionaries";
-import { guidePinCookie, verifyPinToken } from "@/lib/auth";
+import { currentHostId, guidePinCookie, verifyPinToken } from "@/lib/auth";
 import { directionsUrl, formatDistance, haversineMeters, walkingMinutes } from "@/lib/geo";
 import { getRepo } from "@/lib/repo";
 import type { Locale, Property, Stay } from "@/lib/schema";
@@ -36,7 +36,15 @@ export default async function GuidePage(props: {
     ? await repo.getProperty(stay.propertyId)
     : await repo.getPropertyBySlug(slug);
 
-  if (!property || !property.published) notFound();
+  if (!property) notFound();
+
+  /* An unpublished guide is a 404 for the world, but not for the person who
+     owns it: the host has to be able to see their draft before deciding to
+     publish it. Anything else means the dashboard offers a preview button that
+     leads nowhere. */
+  const isOwner = (await currentHostId()) === property.hostId;
+  if (!property.published && !isOwner) notFound();
+  const draft = !property.published;
 
   /* The PIN can be set per booking or for the whole property: the booking one
      wins, so it can be changed for one guest without touching anything else. */
@@ -81,6 +89,7 @@ export default async function GuidePage(props: {
 
   const payload: GuestPayload = {
     audience: stay ? "booking" : "listing",
+    draft,
     stay: stay
       ? {
           guestName: stay.guestName,

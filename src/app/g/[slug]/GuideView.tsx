@@ -40,6 +40,8 @@ export type GuestPlace = Place & {
 
 export type GuestPayload = {
   audience: "booking" | "listing";
+  /* Only ever true for the host looking at their own unpublished guide. */
+  draft: boolean;
   stay: { guestName: string | null; arrival: string; departure: string; nights: number } | null;
   autoTranslated: boolean;
   property: {
@@ -624,6 +626,12 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </header>
 
       <main id="contenido" className="mx-auto max-w-2xl px-5">
+        {data.draft ? (
+          <p className="mt-4 flex items-start gap-2 rounded-xl bg-alert-soft px-4 py-3 text-sm text-alert-ink">
+            <IconInfo size={16} />
+            {t.draftOnlyYou}
+          </p>
+        ) : null}
         {data.audience === "listing" ? (
           <p className="mt-4 flex items-start gap-2 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand-ink">
             <IconInfo size={16} /> {t.showcase}

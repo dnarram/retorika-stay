@@ -317,7 +317,7 @@ export default function PanelClient({
                     {copied === row.slug ? "Copiado" : "Copiar enlace"}
                   </button>
                   
-                    <a href={`/api/qr?size=600&data=${encodeURIComponent(`/g/${row.slug}`)}`}
+                  <a href={`/api/qr?size=600&data=${encodeURIComponent(`/g/${row.slug}`)}`}
                     download={`qr-${row.slug}.svg`}
                     className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium ring-1 ring-line"
                   >
