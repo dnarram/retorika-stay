@@ -17,6 +17,10 @@ import {
   IconPin,
   IconPrint,
   IconQr,
+  IconHelp,
+  IconHome,
+  IconLuggage,
+  IconRules,
   IconWalk,
   IconWifi,
 } from "@/components/icons";
@@ -83,6 +87,19 @@ type SectionId =
 /* Same information, different order depending on the day of the booking. No
    section ever disappears — it moves. Hiding information from a guest who
    cannot find the recycling bin is worse than making them scroll. */
+/* One icon per section. The guest recognises a shape faster than they read a
+   word, and on a 360 px screen the shape is most of what fits. */
+const SECTION_ICON: Record<SectionId, (props: { size?: number }) => React.ReactNode> = {
+  essentials: IconKey,
+  house: IconHome,
+  rules: IconRules,
+  places: IconPin,
+  transport: IconWalk,
+  emergency: IconAlert,
+  checkout: IconLuggage,
+  faq: IconHelp,
+};
+
 const ORDER: Record<StayPhase, SectionId[]> = {
   before: ["essentials", "transport", "rules", "places", "house", "emergency", "checkout", "faq"],
   arrival: ["essentials", "house", "rules", "places", "transport", "emergency", "checkout", "faq"],
@@ -117,6 +134,9 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   const [done, setDone] = useState<number[]>([]);
   const [visited, setVisited] = useState<string[]>([]);
   const [noPrint, setNoPrint] = useState<SectionId[]>([]);
+  /* null = the guest is on the hub. On large screens there is no hub: the
+     sidebar is always visible and a section is always open. */
+  const [active, setActive] = useState<SectionId | null>(null);
 
   /* Service worker registration: the guide is cached on the phone on first
      visit, which is exactly when the guest still has airport Wi-Fi. */
@@ -161,6 +181,18 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     localStorage.setItem(`checkout_${property.slug}`, JSON.stringify(next));
   };
 
+  /* The four critical actions live in a section that may be closed. Open it
+     first, then scroll: the anchor does not exist in the layout until React has
+     painted the section. */
+  const jumpTo = (section: SectionId, anchor?: string) => {
+    setActive(section);
+    setQuery("");
+    requestAnimationFrame(() => {
+      const target = anchor ? document.getElementById(anchor) : null;
+      (target ?? document.getElementById("contenido"))?.scrollIntoView({ block: "start" });
+    });
+  };
+
   const toggleVisited = (id: string) => {
     const next = visited.includes(id) ? visited.filter((v) => v !== id) : [...visited, id];
     setVisited(next);
@@ -196,6 +228,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   };
 
   const needle = query.trim().toLowerCase();
+  const searching = needle.length > 0;
   const needleRef = useRef(needle);
   needleRef.current = needle;
   const visiblePlaces = useMemo(
@@ -630,10 +663,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           </p>
 
           <nav aria-label={t.brand} className="mt-4 grid grid-cols-4 gap-2 no-print">
-            <QuickLink href="#wifi" icon={<IconWifi size={18} />} label={t.quick.wifi} />
-            <QuickLink href="#entry" icon={<IconKey size={18} />} label={t.quick.access} />
-            <QuickLink href="#emergency" icon={<IconAlert size={18} />} label={t.quick.help} accent />
-            <QuickLink href="#map" icon={<IconMap size={18} />} label={t.quick.map} />
+            <QuickLink onClick={() => jumpTo("essentials", "wifi")} icon={<IconWifi size={18} />} label={t.quick.wifi} />
+            <QuickLink onClick={() => jumpTo("essentials", "entry")} icon={<IconKey size={18} />} label={t.quick.access} />
+            <QuickLink onClick={() => jumpTo("emergency")} icon={<IconAlert size={18} />} label={t.quick.help} accent />
+            <QuickLink onClick={() => jumpTo("places", "map")} icon={<IconMap size={18} />} label={t.quick.map} />
           </nav>
         </div>
       </header>
@@ -704,11 +737,104 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           </section>
         ) : null}
 
-        {ORDER[data.phase].map((id) => (
-          <div key={id} className={noPrint.includes(id) ? "print-hidden" : undefined}>
-            {sections[id]}
+        {/* ------------------------------------------------------------------
+            Navigation instead of one long page.
+
+            A guest opens this standing at a door, or in a supermarket aisle, or
+            at 2am wondering where the fuse box is. They are not reading: they
+            are looking for one specific thing. Eight tiles on one screen beat
+            two minutes of scrolling.
+
+            Every section stays in the DOM at all times and is hidden with CSS,
+            never unmounted. That is what keeps the printed version complete,
+            keeps the browser's own find-in-page useful, and means the whole
+            guide is already in the phone when the connection drops.
+        ------------------------------------------------------------------- */}
+        <div className="mt-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
+          {/* Large screens: a permanent sidebar. No hub, no back button, the
+              guest sees where they are and what else exists at all times. */}
+          <nav aria-label={t.sections.essentials} className="no-print hidden lg:block">
+            <ul className="sticky top-4 space-y-1">
+              {ORDER[data.phase].map((id) => {
+                const Icon = SECTION_ICON[id];
+                const current = (active ?? ORDER[data.phase][0]) === id;
+                return (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      onClick={() => setActive(id)}
+                      aria-current={current ? "true" : undefined}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                        current ? "bg-brand text-white" : "text-muted hover:bg-brand-soft"
+                      }`}
+                    >
+                      <Icon size={18} />
+                      {t.sections[id]}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+
+          <div>
+            {/* Small and medium screens: the hub. Two columns on a phone, four
+                on a tablet, where there is room to show them all at once. */}
+            <div className={`no-print lg:hidden ${active || searching ? "hidden" : ""}`}>
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {ORDER[data.phase].map((id) => {
+                  const Icon = SECTION_ICON[id];
+                  return (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        onClick={() => setActive(id)}
+                        className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-card border border-line bg-white p-3 text-center transition active:scale-95"
+                      >
+                        <span className="text-brand">
+                          <Icon size={30} />
+                        </span>
+                        <span className="text-xs font-medium leading-tight">{t.sections[id]}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            {/* Back to the hub. Only on small screens, where a hub exists. */}
+            {active ? (
+              <button
+                type="button"
+                onClick={() => setActive(null)}
+                className="no-print mb-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-deep lg:hidden"
+              >
+                <IconArrow size={16} className="rotate-180" /> {t.actions.seeAll}
+              </button>
+            ) : null}
+
+            {ORDER[data.phase].map((id) => {
+              /* Hidden, never unmounted: `print:block` puts every section back
+                 on paper regardless of what is on screen. */
+              /* While the guest is typing, the sections that can actually
+                 answer a search take over on every screen size. Filtering
+                 inside a closed section would look like "no results". */
+              const searchable = id === "places" || id === "faq";
+              const openOnLarge = searching ? searchable : (active ?? ORDER[data.phase][0]) === id;
+              const openOnSmall = searching ? searchable : active === id;
+              const classes = [
+                openOnSmall ? "" : "hidden",
+                openOnLarge ? "lg:block" : "lg:hidden",
+                noPrint.includes(id) ? "print-hidden" : "print:block",
+              ].join(" ");
+              return (
+                <div key={id} className={classes}>
+                  {sections[id]}
+                </div>
+              );
+            })}
           </div>
-        ))}
+        </div>
 
         {data.demoPhase ? <PhasePreview locale={data.locale} phase={data.phase} /> : null}
 
@@ -834,26 +960,27 @@ function Chip({
 }
 
 function QuickLink({
-  href,
+  onClick,
   icon,
   label,
   accent,
 }: {
-  href: string;
+  onClick: () => void;
   icon: React.ReactNode;
   label: string;
   accent?: boolean;
 }) {
   return (
-    <a
-      href={href}
+    <button
+      type="button"
+      onClick={onClick}
       className={`flex flex-col items-center gap-1 rounded-xl px-2 py-2.5 text-[11px] font-medium ${
         accent ? "bg-alert text-white" : "bg-brand text-white"
       }`}
     >
       {icon}
       {label}
-    </a>
+    </button>
   );
 }
 

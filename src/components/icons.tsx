@@ -132,3 +132,31 @@ export const IconShare = ({ size = 20, className }: IconProps) => (
     <path d="M6 12H4.5v8h15v-8H18" />
   </svg>
 );
+
+export const IconHome = ({ size = 20, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M4 10.5 12 4l8 6.5M6 12v8h12v-8" />
+    <path d="M10 20v-5h4v5" />
+  </svg>
+);
+
+export const IconHelp = ({ size = 20, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.5 9.2a2.6 2.6 0 1 1 3.4 2.5c-.6.2-.9.8-.9 1.4v.4M12 16.8v.01" />
+  </svg>
+);
+
+export const IconRules = ({ size = 20, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M6.5 3.5h11v17h-11z" />
+    <path d="M9.5 8h5M9.5 12h5M9.5 16h3" />
+  </svg>
+);
+
+export const IconLuggage = ({ size = 20, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <rect x="5" y="8" width="14" height="12" rx="2" />
+    <path d="M9 8V5.5h6V8M10 12v4M14 12v4" />
+  </svg>
+);
