@@ -248,12 +248,14 @@ export default function PanelClient({
                         >
                           {stay.revoked ? "Revocada" : PHASE_LABEL[stay.phase]}
                         </span>
+                      {row.published ? (
                         <Link
                           href={`/g/${stay.slug}`}
                           className="text-xs font-medium text-brand-deep underline"
                         >
                           abrir
                         </Link>
+                  ) : null}
                       </span>
                     </li>
                   ))}
@@ -297,23 +299,32 @@ export default function PanelClient({
                 href={`/g/${row.slug}`}
                 className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium ring-1 ring-line"
               >
-                Vista de muestra
+                {row.published ? "Vista de muestra" : "Previsualizar borrador"}
               </Link>
-              <button
-                type="button"
-                onClick={() => copyLink(row.slug)}
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium ring-1 ring-line"
-              >
-                {copied === row.slug ? <IconCheck size={16} /> : <IconCopy size={16} />}
-                {copied === row.slug ? "Copiado" : "Copiar enlace"}
-              </button>
-              <a
-                href={`/api/qr?size=600&data=${encodeURIComponent(`/g/${row.slug}`)}`}
-                download={`qr-${row.slug}.svg`}
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium ring-1 ring-line"
-              >
-                <IconQr size={16} /> QR
-              </a>
+
+              {/* Sharing actions only exist once the guide is published. An
+                  unpublished guide is a 404 for everyone but its owner, so a
+                  copy-link button would hand the host a broken link and a QR
+                  would print one onto paper. */}
+              {row.published ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => copyLink(row.slug)}
+                    className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium ring-1 ring-line"
+                  >
+                    {copied === row.slug ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                    {copied === row.slug ? "Copiado" : "Copiar enlace"}
+                  </button>
+                  
+                    <a href={`/api/qr?size=600&data=${encodeURIComponent(`/g/${row.slug}`)}`}
+                    download={`qr-${row.slug}.svg`}
+                    className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium ring-1 ring-line"
+                  >
+                    <IconQr size={16} /> QR
+                  </a>
+                </>
+              ) : null}
               <button
                 type="button"
                 onClick={() => removeProperty(row)}
