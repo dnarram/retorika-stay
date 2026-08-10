@@ -40,8 +40,8 @@ export default async function GuidePage(props: {
 
   /* An unpublished guide is a 404 for the world, but not for the person who
      owns it: the host has to be able to see their draft before deciding to
-     publish it. Anything else means the dashboard offers a preview button that
-     leads nowhere. */
+     publish it. Anything else means the dashboard offers three share buttons
+     that lead nowhere. */
   const isOwner = (await currentHostId()) === property.hostId;
   if (!property.published && !isOwner) notFound();
   const draft = !property.published;
@@ -90,6 +90,9 @@ export default async function GuidePage(props: {
   const payload: GuestPayload = {
     audience: stay ? "booking" : "listing",
     draft,
+    /* Drives the "back to my properties" link. Only the owner ever sees it: a
+       guest must never learn there is a dashboard behind this page. */
+    isOwner,
     stay: stay
       ? {
           guestName: stay.guestName,

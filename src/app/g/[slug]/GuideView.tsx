@@ -42,6 +42,7 @@ export type GuestPayload = {
   audience: "booking" | "listing";
   /* Only ever true for the host looking at their own unpublished guide. */
   draft: boolean;
+  isOwner: boolean;
   stay: { guestName: string | null; arrival: string; departure: string; nights: number } | null;
   autoTranslated: boolean;
   property: {
@@ -603,9 +604,21 @@ export default function GuideView({ data }: { data: GuestPayload }) {
 
       <header className="bg-brand-ink px-5 pb-5 pt-6 text-white">
         <div className="mx-auto max-w-2xl">
+          {data.isOwner ? (
+            <a
+              href="/panel"
+              className="no-print mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white"
+            >
+              ← Mis alojamientos
+            </a>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs uppercase tracking-[0.2em] text-white/70">{t.brand}</span>
-            <LanguageSwitcher current={data.locale} />
+            <LanguageSwitcher
+              current={data.locale}
+              autoTranslated={data.autoTranslated}
+              note={t.autoTranslated}
+            />
           </div>
           <h1 className="mt-3 font-display text-2xl font-semibold">{guide.welcomeTitle}</h1>
           <p className="text-sm text-white/70">
@@ -632,6 +645,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             {t.draftOnlyYou}
           </p>
         ) : null}
+
         {data.audience === "listing" ? (
           <p className="mt-4 flex items-start gap-2 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand-ink">
             <IconInfo size={16} /> {t.showcase}
@@ -843,23 +857,45 @@ function QuickLink({
   );
 }
 
-function LanguageSwitcher({ current }: { current: Locale }) {
+function LanguageSwitcher({
+  current,
+  autoTranslated,
+  note,
+}: {
+  current: Locale;
+  autoTranslated: boolean;
+  note: string;
+}) {
+  /* A <select> rather than a row of chips: chips do not scale past four
+     languages and give no clue which one is active on a narrow screen. The
+     browser language is already selected server-side, so this control is there
+     for the guest who wants something else, not for the one who does not care.
+     Navigating on change keeps it working with JavaScript disabled too. */
   return (
-    <div className="flex items-center gap-1 text-xs no-print">
-      {(Object.keys(LOCALE_NAMES) as Locale[]).map((code) => (
-        <a
-          key={code}
-          href={`?lang=${code}`}
-          hrefLang={code}
-          aria-current={code === current ? "true" : undefined}
-          title={LOCALE_NAMES[code]}
-          className={`rounded-full px-2 py-1 uppercase ${
-            code === current ? "bg-white text-brand-ink" : "text-white/70 hover:text-white"
-          }`}
+    <div className="no-print flex flex-col items-end gap-1">
+      <label className="sr-only" htmlFor="locale">
+        {note}
+      </label>
+      <div className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5">
+        <IconGlobe size={14} />
+        <select
+          id="locale"
+          value={current}
+          onChange={(event) => {
+            const url = new URL(window.location.href);
+            url.searchParams.set("lang", event.target.value);
+            window.location.href = url.toString();
+          }}
+          className="bg-transparent text-xs text-white outline-none [&>option]:text-ink"
         >
-          {code}
-        </a>
-      ))}
+          {(Object.keys(LOCALE_NAMES) as Locale[]).map((code) => (
+            <option key={code} value={code}>
+              {LOCALE_NAMES[code]}
+            </option>
+          ))}
+        </select>
+      </div>
+      {autoTranslated ? <span className="text-[11px] text-white/60">{note}</span> : null}
     </div>
   );
 }

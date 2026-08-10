@@ -75,7 +75,7 @@ create table if not exists metrics (
   property_id text not null references properties(id) on delete cascade,
   day         date not null default current_date,
   kind        text not null check (kind in
-                ('open','language','section','search_miss','call')),
+                ('open','language','section','search_miss','call','device')),
   value       text not null default '',
   count       integer not null default 0,
   primary key (property_id, day, kind, value)

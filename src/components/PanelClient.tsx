@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconAlert, IconArrow, IconCheck, IconCopy, IconInfo, IconQr } from "@/components/icons";
+import { IconAlert, IconArrow, IconCheck, IconCopy, IconInfo, IconQr, IconShare } from "@/components/icons";
 import type { StayPhase } from "@/lib/stay";
 
 export type PropertyRow = {
@@ -28,6 +28,7 @@ export type PropertyRow = {
   metrics: {
     opens: number;
     languages: { value: string; count: number }[];
+    devices: { value: string; count: number }[];
     misses: { value: string; count: number }[];
   };
 };
@@ -89,6 +90,48 @@ export default function PanelClient({
     if (!confirm(`¿Borrar "${row.name}" y todas sus guías y estancias? No se puede deshacer.`)) return;
     await fetch(`/api/properties/${row.id}`, { method: "DELETE" });
     router.refresh();
+  }
+
+  /* Publishing from the card itself: making the host walk to step 7 of the
+     editor to flip one switch is friction with nothing on the other side. */
+  async function togglePublished(row: PropertyRow) {
+    setBusy(true);
+    await fetch(`/api/properties/${row.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ published: !row.published }),
+    });
+    setBusy(false);
+    router.refresh();
+  }
+
+  /* Publishing from the card itself: sending the host into step 7 of the editor
+     to flip one switch is friction with nothing on the other side. */
+  async function publish(row: PropertyRow) {
+    setBusy(true);
+    await fetch(`/api/properties/${row.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ published: true }),
+    });
+    setBusy(false);
+    router.refresh();
+  }
+
+  /* The phone's own share sheet: WhatsApp, SMS, mail, whatever the host uses.
+     No backend, no email provider. Desktop browsers without the API fall back
+     to copying the link, which is what the user wanted anyway. */
+  async function shareLink(row: PropertyRow) {
+    const url = `${window.location.origin}/g/${row.slug}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: row.name, text: `Guía de ${row.name}`, url });
+        return;
+      } catch {
+        /* the user cancelled: not an error */
+      }
+    }
+    await copyLink(row.slug);
   }
 
   async function copyLink(slug: string) {
@@ -180,9 +223,45 @@ export default function PanelClient({
                   row.published ? "bg-ok-soft text-ok-ink" : "bg-brand-soft text-brand-ink"
                 }`}
               >
-                {row.published ? "Publicada" : "Borrador"}
+                {row.published ? "Publicada" : "Sin publicar"}
               </span>
             </div>
+
+            {!row.published ? (
+              <div className="mt-4 rounded-xl bg-brand-soft px-3 py-2 text-sm text-brand-ink">
+                <p className="flex items-start gap-2">
+                  <IconInfo size={16} />
+                  Sin publicar: solo tú puedes verla, con «Previsualizar borrador». Publícala
+                  cuando esté lista y aparecerán el enlace y el QR para compartirla.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => togglePublished(row)}
+                  disabled={busy}
+                  className="mt-2 rounded-full bg-brand px-4 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                >
+                  Publicar guía
+                </button>
+              </div>
+            ) : null}
+
+            {!row.published ? (
+              <div className="mt-4 rounded-xl bg-brand-soft px-3 py-2 text-sm text-brand-ink">
+                <p className="flex items-start gap-2">
+                  <IconInfo size={16} />
+                  Sin publicar: solo tú puedes verla, con «Previsualizar borrador». Publícala
+                  cuando esté lista y aparecerán las opciones para compartirla.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => publish(row)}
+                  disabled={busy}
+                  className="mt-2 rounded-full bg-brand px-4 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                >
+                  Publicar guía
+                </button>
+              </div>
+            ) : null}
 
             {row.rotateCode ? (
               <p className="mt-4 flex items-start gap-2 rounded-xl bg-alert-soft px-3 py-2 text-sm text-alert-ink">
@@ -248,14 +327,14 @@ export default function PanelClient({
                         >
                           {stay.revoked ? "Revocada" : PHASE_LABEL[stay.phase]}
                         </span>
-                      {row.published ? (
-                        <Link
-                          href={`/g/${stay.slug}`}
-                          className="text-xs font-medium text-brand-deep underline"
-                        >
-                          abrir
-                        </Link>
-                  ) : null}
+                        {row.published ? (
+                          <Link
+                            href={`/g/${stay.slug}`}
+                            className="text-xs font-medium text-brand-deep underline"
+                          >
+                            abrir
+                          </Link>
+                        ) : null}
                       </span>
                     </li>
                   ))}
@@ -276,6 +355,12 @@ export default function PanelClient({
                         .join(" · ")}`
                     : null}
                 </p>
+                {row.metrics.devices.length > 0 ? (
+                  <p className="mt-1 text-muted">
+                    Dispositivo aproximado:{" "}
+                    {row.metrics.devices.map((d) => `${d.value} ${d.count}`).join(" · ")}
+                  </p>
+                ) : null}
                 {row.metrics.misses.length > 0 ? (
                   <p className="mt-2 text-muted">
                     Buscaron y no encontraron:{" "}
@@ -316,8 +401,15 @@ export default function PanelClient({
                     {copied === row.slug ? <IconCheck size={16} /> : <IconCopy size={16} />}
                     {copied === row.slug ? "Copiado" : "Copiar enlace"}
                   </button>
-                  
-                  <a href={`/api/qr?size=600&data=${encodeURIComponent(`/g/${row.slug}`)}`}
+                  <button
+                    type="button"
+                    onClick={() => shareLink(row)}
+                    className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium ring-1 ring-line"
+                  >
+                    <IconShare size={16} /> Compartir
+                  </button>
+                  <a
+                    href={`/api/qr?size=600&data=${encodeURIComponent(`/g/${row.slug}`)}`}
                     download={`qr-${row.slug}.svg`}
                     className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium ring-1 ring-line"
                   >

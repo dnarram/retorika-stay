@@ -296,6 +296,23 @@ export default function Editor({
             {property.city} · paso {step} de {STEPS.length}
           </p>
         </div>
+        <div className="flex items-center gap-4">
+          {/* The publish button lives in the header, visible from every step:
+              it is the one action the host is working towards, and burying it
+              in step 7 made it invisible. It disappears once published. */}
+          {!property.published ? (
+            <button
+              type="button"
+              onClick={() => patchProperty({ published: true })}
+              className="rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-white"
+            >
+              Publicar guía
+            </button>
+          ) : (
+            <span className="rounded-full bg-ok-soft px-4 py-2 text-sm font-medium text-ok-ink">
+              Publicada
+            </span>
+          )}
         <div className="text-right text-sm">
           <p className="font-medium">{progress.score}% completada</p>
           <p className="text-muted">
@@ -304,6 +321,7 @@ export default function Editor({
             {save === "error" ? "No se pudo guardar" : null}
             {save === "idle" ? "Autoguardado activo" : null}
           </p>
+        </div>
         </div>
       </header>
 
@@ -824,7 +842,7 @@ export default function Editor({
                     onChange={(event) => patchProperty({ published: event.target.checked })}
                     className="h-5 w-5 accent-[var(--color-brand)]"
                   />
-                  Guía publicada y accesible por enlace
+                  Guía publicada y accesible por enlace (desmarca para retirarla)
                 </label>
                 <Field
                   label="PIN de acceso (opcional)"

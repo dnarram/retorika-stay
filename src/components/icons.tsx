@@ -125,3 +125,10 @@ export const IconGlobe = ({ size = 20, className }: IconProps) => (
     <path d="M3.2 9.5h17.6M3.2 14.5h17.6M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18Z" />
   </svg>
 );
+
+export const IconShare = ({ size = 20, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M12 3.5v12M8 7l4-3.5L16 7" />
+    <path d="M6 12H4.5v8h15v-8H18" />
+  </svg>
+);

@@ -50,6 +50,9 @@ export default async function PanelPage() {
           languages: metrics
             .filter((m) => m.kind === "language")
             .map((m) => ({ value: m.value, count: m.count })),
+          devices: metrics
+            .filter((m) => m.kind === "device")
+            .map((m) => ({ value: m.value, count: m.count })),
           misses: metrics
             .filter((m) => m.kind === "search_miss")
             .slice(0, 5)

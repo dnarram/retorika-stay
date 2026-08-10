@@ -149,7 +149,7 @@ export const stayInputSchema = staySchema.omit({ id: true, propertyId: true, slu
 
 /* Metrics aggregated per property and day. Never per guest or per device: with
    no identifiers there is no personal data to protect. */
-export const METRIC_KINDS = ["open", "language", "section", "search_miss", "call"] as const;
+export const METRIC_KINDS = ["open", "language", "section", "search_miss", "call", "device"] as const;
 export const metricKindSchema = z.enum(METRIC_KINDS);
 export type MetricKind = (typeof METRIC_KINDS)[number];
 
