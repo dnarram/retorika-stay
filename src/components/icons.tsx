@@ -160,3 +160,12 @@ export const IconLuggage = ({ size = 20, className }: IconProps) => (
     <path d="M9 8V5.5h6V8M10 12v4M14 12v4" />
   </svg>
 );
+
+export const IconGrid = ({ size = 20, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
+    <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
+    <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
+    <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
+  </svg>
+);

@@ -17,6 +17,7 @@ import {
   IconPin,
   IconPrint,
   IconQr,
+  IconGrid,
   IconHelp,
   IconHome,
   IconLuggage,
@@ -74,8 +75,15 @@ export type GuestPayload = {
   places: GuestPlace[];
 };
 
+/* One id per icon, and one icon per question the guest actually has.
+   "Lo esencial" used to hold the address, the entry steps and the Wi-Fi: three
+   different needs at three different moments, behind one tile. A guest standing
+   at the door at midnight should not have to open a section that also contains
+   the parking. */
 type SectionId =
-  | "essentials"
+  | "arrival"
+  | "entry"
+  | "wifi"
   | "house"
   | "rules"
   | "places"
@@ -90,7 +98,9 @@ type SectionId =
 /* One icon per section. The guest recognises a shape faster than they read a
    word, and on a 360 px screen the shape is most of what fits. */
 const SECTION_ICON: Record<SectionId, (props: { size?: number }) => React.ReactNode> = {
-  essentials: IconKey,
+  arrival: IconMap,
+  entry: IconKey,
+  wifi: IconWifi,
   house: IconHome,
   rules: IconRules,
   places: IconPin,
@@ -101,11 +111,11 @@ const SECTION_ICON: Record<SectionId, (props: { size?: number }) => React.ReactN
 };
 
 const ORDER: Record<StayPhase, SectionId[]> = {
-  before: ["essentials", "transport", "rules", "places", "house", "emergency", "checkout", "faq"],
-  arrival: ["essentials", "house", "rules", "places", "transport", "emergency", "checkout", "faq"],
-  staying: ["places", "house", "essentials", "transport", "rules", "emergency", "checkout", "faq"],
-  departure: ["checkout", "essentials", "places", "transport", "emergency", "house", "rules", "faq"],
-  memories: ["places", "faq", "transport", "essentials", "house", "rules", "emergency", "checkout"],
+  before: ["arrival", "entry", "rules", "places", "transport", "wifi", "house", "emergency", "checkout", "faq"],
+  arrival: ["entry", "wifi", "arrival", "house", "rules", "places", "transport", "emergency", "checkout", "faq"],
+  staying: ["places", "wifi", "house", "transport", "rules", "entry", "arrival", "emergency", "checkout", "faq"],
+  departure: ["checkout", "places", "transport", "wifi", "house", "entry", "arrival", "rules", "emergency", "faq"],
+  memories: ["places", "faq", "transport", "arrival", "house", "rules", "wifi", "entry", "checkout", "emergency"],
 };
 
 /* A beacon that never blocks navigation and is silently lost when the guest is
@@ -137,6 +147,13 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   /* null = the guest is on the hub. On large screens there is no hub: the
      sidebar is always visible and a section is always open. */
   const [active, setActive] = useState<SectionId | null>(null);
+  /* Two guests, two behaviours, one guide.
+
+     Before the trip somebody reads the whole thing on the sofa; on the third
+     night somebody needs the bin day in four seconds. Neither layout serves
+     both, and asking the guest to "configure" anything is a lost guest. So:
+     two chips, no explanation needed, the choice remembered on the device. */
+  const [reading, setReading] = useState(false);
 
   /* Service worker registration: the guide is cached on the phone on first
      visit, which is exactly when the guest still has airport Wi-Fi. */
@@ -151,6 +168,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     if (saved) setDone(JSON.parse(saved) as number[]);
     const seen = localStorage.getItem(`visited_${property.slug}`);
     if (seen) setVisited(JSON.parse(seen) as string[]);
+    setReading(localStorage.getItem("guide_reading") === "1");
   }, [property.slug]);
 
   /* Analytics without analytics: two aggregated counters per property, no
@@ -277,8 +295,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   )}`;
 
   const sections: Record<SectionId, React.ReactNode> = {
-    essentials: (
-      <Section id="essentials" title={t.sections.essentials} key="essentials">
+    arrival: (
+      <Section id="arrival" title={t.sections.arrival} key="arrival">
         <Card>
           <Row icon={<IconPin size={18} />} label={t.labels.address} value={property.address} />
           <a
@@ -293,11 +311,20 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             <Row icon={<IconClock size={18} />} label={t.labels.checkin} value={property.checkinFrom} compact />
             <Row icon={<IconClock size={18} />} label={t.labels.checkout} value={property.checkoutUntil} compact />
           </div>
+          {guide.parking ? (
+            <p className="mt-4 text-sm text-muted">
+              <span className="font-medium text-ink">{t.labels.parking}: </span>
+              {guide.parking}
+            </p>
+          ) : null}
         </Card>
+      </Section>
+    ),
 
-        <Card id="entry">
-          <h3 className="font-display text-base font-semibold">{t.quick.access}</h3>
-          <ol className="mt-3 space-y-2 text-sm">
+    entry: (
+      <Section id="entry" title={t.sections.entry} key="entry">
+        <Card>
+          <ol className="space-y-2 text-sm">
             {guide.arrivalSteps.map((step, index) => (
               <li key={step} className="flex gap-3">
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand-ink">
@@ -341,18 +368,14 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               </p>
             )}
           </div>
-
-          {guide.parking ? (
-            <p className="mt-4 text-sm text-muted">
-              <span className="font-medium text-ink">{t.labels.parking}: </span>
-              {guide.parking}
-            </p>
-          ) : null}
         </Card>
+      </Section>
+    ),
 
-        <Card id="wifi">
-          <h3 className="font-display text-base font-semibold">{t.quick.wifi}</h3>
-          <dl className="mt-3 space-y-2 text-sm">
+    wifi: (
+      <Section id="wifi" title={t.sections.wifi} key="wifi">
+        <Card>
+          <dl className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
               <dt className="text-muted">{t.labels.network}</dt>
               <dd className="font-mono">{property.wifiSsid}</dd>
@@ -662,12 +685,6 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             <IconClock size={14} /> {t.phase[data.phase]} — {t.phaseHint[data.phase]}
           </p>
 
-          <nav aria-label={t.brand} className="mt-4 grid grid-cols-4 gap-2 no-print">
-            <QuickLink onClick={() => jumpTo("essentials", "wifi")} icon={<IconWifi size={18} />} label={t.quick.wifi} />
-            <QuickLink onClick={() => jumpTo("essentials", "entry")} icon={<IconKey size={18} />} label={t.quick.access} />
-            <QuickLink onClick={() => jumpTo("emergency")} icon={<IconAlert size={18} />} label={t.quick.help} accent />
-            <QuickLink onClick={() => jumpTo("places", "map")} icon={<IconMap size={18} />} label={t.quick.map} />
-          </nav>
         </div>
       </header>
 
@@ -693,7 +710,31 @@ export default function GuideView({ data }: { data: GuestPayload }) {
 
         <p className="mt-5 text-[15px] leading-relaxed text-ink">{guide.welcomeIntro}</p>
 
-        <div className="no-print sticky top-0 z-10 -mx-5 mt-5 bg-canvas/95 px-5 py-3 backdrop-blur">
+        <div className="no-print mt-5 flex gap-1 rounded-full bg-white p-1 text-sm font-medium ring-1 ring-line">
+          {[
+            { value: false, label: t.modeSections, icon: <IconGrid size={16} /> },
+            { value: true, label: t.modeRead, icon: <IconRules size={16} /> },
+          ].map((option) => (
+            <button
+              key={String(option.value)}
+              type="button"
+              aria-pressed={reading === option.value}
+              onClick={() => {
+                setReading(option.value);
+                setActive(null);
+                localStorage.setItem("guide_reading", option.value ? "1" : "0");
+              }}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2 transition ${
+                reading === option.value ? "bg-brand text-white" : "text-muted"
+              }`}
+            >
+              {option.icon}
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="no-print sticky top-0 z-10 -mx-5 mt-3 bg-canvas/95 px-5 py-3 backdrop-blur">
           <label className="sr-only" htmlFor="buscar">
             {t.actions.search}
           </label>
@@ -750,10 +791,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             keeps the browser's own find-in-page useful, and means the whole
             guide is already in the phone when the connection drops.
         ------------------------------------------------------------------- */}
-        <div className="mt-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
+        <div className={reading ? "mt-6" : "mt-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8"}>
           {/* Large screens: a permanent sidebar. No hub, no back button, the
               guest sees where they are and what else exists at all times. */}
-          <nav aria-label={t.sections.essentials} className="no-print hidden lg:block">
+          <nav aria-label={t.brand} className={`no-print hidden ${reading ? "" : "lg:block"}`}>
             <ul className="sticky top-4 space-y-1">
               {ORDER[data.phase].map((id) => {
                 const Icon = SECTION_ICON[id];
@@ -780,7 +821,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           <div>
             {/* Small and medium screens: the hub. Two columns on a phone, four
                 on a tablet, where there is room to show them all at once. */}
-            <div className={`no-print lg:hidden ${active || searching ? "hidden" : ""}`}>
+            <div className={`no-print lg:hidden ${active || searching || reading ? "hidden" : ""}`}>
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {ORDER[data.phase].map((id) => {
                   const Icon = SECTION_ICON[id];
@@ -803,7 +844,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             </div>
 
             {/* Back to the hub. Only on small screens, where a hub exists. */}
-            {active ? (
+            {active && !reading ? (
               <button
                 type="button"
                 onClick={() => setActive(null)}
@@ -820,8 +861,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                  answer a search take over on every screen size. Filtering
                  inside a closed section would look like "no results". */
               const searchable = id === "places" || id === "faq";
-              const openOnLarge = searching ? searchable : (active ?? ORDER[data.phase][0]) === id;
-              const openOnSmall = searching ? searchable : active === id;
+              /* Reading mode is the old continuous page: everything stacked, in
+                 the order the phase dictates. */
+              const openOnLarge = reading ? true : searching ? searchable : (active ?? ORDER[data.phase][0]) === id;
+              const openOnSmall = reading ? true : searching ? searchable : active === id;
               const classes = [
                 openOnSmall ? "" : "hidden",
                 openOnLarge ? "lg:block" : "lg:hidden",
@@ -955,31 +998,6 @@ function Chip({
       }`}
     >
       {children}
-    </button>
-  );
-}
-
-function QuickLink({
-  onClick,
-  icon,
-  label,
-  accent,
-}: {
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  accent?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex flex-col items-center gap-1 rounded-xl px-2 py-2.5 text-[11px] font-medium ${
-        accent ? "bg-alert text-white" : "bg-brand text-white"
-      }`}
-    >
-      {icon}
-      {label}
     </button>
   );
 }

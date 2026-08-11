@@ -227,42 +227,6 @@ export default function PanelClient({
               </span>
             </div>
 
-            {!row.published ? (
-              <div className="mt-4 rounded-xl bg-brand-soft px-3 py-2 text-sm text-brand-ink">
-                <p className="flex items-start gap-2">
-                  <IconInfo size={16} />
-                  Sin publicar: solo tú puedes verla, con «Previsualizar borrador». Publícala
-                  cuando esté lista y aparecerán el enlace y el QR para compartirla.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => togglePublished(row)}
-                  disabled={busy}
-                  className="mt-2 rounded-full bg-brand px-4 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-                >
-                  Publicar guía
-                </button>
-              </div>
-            ) : null}
-
-            {!row.published ? (
-              <div className="mt-4 rounded-xl bg-brand-soft px-3 py-2 text-sm text-brand-ink">
-                <p className="flex items-start gap-2">
-                  <IconInfo size={16} />
-                  Sin publicar: solo tú puedes verla, con «Previsualizar borrador». Publícala
-                  cuando esté lista y aparecerán las opciones para compartirla.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => publish(row)}
-                  disabled={busy}
-                  className="mt-2 rounded-full bg-brand px-4 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-                >
-                  Publicar guía
-                </button>
-              </div>
-            ) : null}
-
             {row.rotateCode ? (
               <p className="mt-4 flex items-start gap-2 rounded-xl bg-alert-soft px-3 py-2 text-sm text-alert-ink">
                 <IconAlert size={16} />
