@@ -10,6 +10,7 @@ import type { Locale } from "@/lib/schema";
 
 const es = {
   brand: "Retorika Stay",
+  guideTitle: "Guía de bienvenida",
   tagline: "Todo lo de tu alojamiento, en un solo sitio",
   langLabel: "Idioma",
   sections: {
@@ -122,6 +123,7 @@ export type Dict = typeof es;
 
 const en: Dict = {
   brand: "Retorika Stay",
+  guideTitle: "Welcome book",
   tagline: "Everything about your stay, in one place",
   langLabel: "Language",
   sections: {
@@ -232,6 +234,7 @@ const en: Dict = {
 
 const fr: Dict = {
   brand: "Retorika Stay",
+  guideTitle: "Livret d'accueil",
   tagline: "Tout sur votre séjour, au même endroit",
   langLabel: "Langue",
   sections: {
@@ -342,6 +345,7 @@ const fr: Dict = {
 
 const pt: Dict = {
   brand: "Retorika Stay",
+  guideTitle: "Guia de boas-vindas",
   tagline: "Tudo sobre a sua estadia, num só lugar",
   langLabel: "Idioma",
   sections: {

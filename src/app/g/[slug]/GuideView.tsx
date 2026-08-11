@@ -110,13 +110,45 @@ const SECTION_ICON: Record<SectionId, (props: { size?: number }) => React.ReactN
   faq: IconHelp,
 };
 
-const ORDER: Record<StayPhase, SectionId[]> = {
-  before: ["arrival", "entry", "rules", "places", "transport", "wifi", "house", "emergency", "checkout", "faq"],
-  arrival: ["entry", "wifi", "arrival", "house", "rules", "places", "transport", "emergency", "checkout", "faq"],
-  staying: ["places", "wifi", "house", "transport", "rules", "entry", "arrival", "emergency", "checkout", "faq"],
-  departure: ["checkout", "places", "transport", "wifi", "house", "entry", "arrival", "rules", "emergency", "faq"],
-  memories: ["places", "faq", "transport", "arrival", "house", "rules", "wifi", "entry", "checkout", "emergency"],
+/* The order is a story, not a menu.
+
+   NARRATIVE follows the guest's own journey: you travel, you get in, you
+   connect, you learn how the flat works, you learn what is expected of you, you
+   go out, you move around, something goes wrong, you leave, you still have a
+   doubt. Read top to bottom it makes sense on its own.
+
+   The phase of the booking does not shuffle that story: it only PROMOTES the
+   one or two sections that matter today to the front, and everything else keeps
+   its narrative position. Reordering the whole list per phase — which is what
+   this did before — meant the guide read differently every day and the guest
+   lost the map they had built in their head. */
+const NARRATIVE: SectionId[] = [
+  "arrival",
+  "entry",
+  "wifi",
+  "house",
+  "rules",
+  "places",
+  "transport",
+  "emergency",
+  "checkout",
+  "faq",
+];
+
+const PINNED: Record<StayPhase, SectionId[]> = {
+  before: ["arrival", "entry"],
+  arrival: ["entry", "wifi"],
+  staying: ["places"],
+  departure: ["checkout"],
+  memories: ["places"],
 };
+
+function sectionOrder(phase: StayPhase): SectionId[] {
+  const pinned = PINNED[phase];
+  return [...pinned, ...NARRATIVE.filter((id) => !pinned.includes(id))];
+}
+
+
 
 /* A beacon that never blocks navigation and is silently lost when the guest is
    offline: metrics must never get in the way of the guide. */
@@ -154,6 +186,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
      both, and asking the guest to "configure" anything is a lost guest. So:
      two chips, no explanation needed, the choice remembered on the device. */
   const [reading, setReading] = useState(false);
+  const order = useMemo(() => sectionOrder(data.phase), [data.phase]);
 
   /* Service worker registration: the guide is cached on the phone on first
      visit, which is exactly when the guest still has airport Wi-Fi. */
@@ -489,7 +522,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           />
         </div>
 
-        <ul className="mt-4 space-y-3">
+        <ul className="mt-4 space-y-3 wide-two-col">
           {visiblePlaces.map((place) => {
             const note = place.notes[data.locale] ?? place.notes.es;
             return (
@@ -659,7 +692,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </a>
 
       <header className="bg-brand-ink px-5 pb-5 pt-6 text-white">
-        <div className="mx-auto max-w-2xl">
+        <div className="mx-auto max-w-2xl lg:max-w-6xl">
           {data.isOwner ? (
             <a
               href="/panel"
@@ -669,7 +702,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             </a>
           ) : null}
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs uppercase tracking-[0.2em] text-white/70">{t.brand}</span>
+            <span className="text-xs uppercase tracking-[0.2em] text-white/70">{t.guideTitle}</span>
             <LanguageSwitcher
               current={data.locale}
               autoTranslated={data.autoTranslated}
@@ -681,14 +714,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             {property.city} · {t.labels.host}: {property.hostName}
           </p>
 
-          <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs">
-            <IconClock size={14} /> {t.phase[data.phase]} — {t.phaseHint[data.phase]}
-          </p>
-
         </div>
       </header>
 
-      <main id="contenido" className="mx-auto max-w-2xl px-5">
+      <main id="contenido" className="mx-auto max-w-2xl px-5 lg:max-w-6xl">
         {data.draft ? (
           <p className="mt-4 flex items-start gap-2 rounded-xl bg-alert-soft px-4 py-3 text-sm text-alert-ink">
             <IconInfo size={16} />
@@ -791,14 +820,18 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             keeps the browser's own find-in-page useful, and means the whole
             guide is already in the phone when the connection drops.
         ------------------------------------------------------------------- */}
-        <div className={reading ? "mt-6" : "mt-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8"}>
+        <div className={reading ? "mt-6" : "mt-6 lg:grid lg:grid-cols-[260px_1fr] lg:gap-10"}>
           {/* Large screens: a permanent sidebar. No hub, no back button, the
               guest sees where they are and what else exists at all times. */}
           <nav aria-label={t.brand} className={`no-print hidden ${reading ? "" : "lg:block"}`}>
             <ul className="sticky top-4 space-y-1">
-              {ORDER[data.phase].map((id) => {
+              {/* On a wide screen the guide stops being a narrow ribbon with two
+                empty margins. Two columns halve the scrolling and, just as
+                important, keep the line length readable: text stretched across
+                1400 px is worse than text in a column, not better. */}
+            {order.map((id) => {
                 const Icon = SECTION_ICON[id];
-                const current = (active ?? ORDER[data.phase][0]) === id;
+                const current = (active ?? order[0]) === id;
                 return (
                   <li key={id}>
                     <button
@@ -818,12 +851,16 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             </ul>
           </nav>
 
-          <div>
+          <div className={reading ? "lg:grid lg:grid-cols-2 lg:items-start lg:gap-6" : undefined}>
             {/* Small and medium screens: the hub. Two columns on a phone, four
                 on a tablet, where there is room to show them all at once. */}
-            <div className={`no-print lg:hidden ${active || searching || reading ? "hidden" : ""}`}>
+            <div className={`no-print lg:col-span-2 lg:hidden ${active || searching || reading ? "hidden" : ""}`}>
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {ORDER[data.phase].map((id) => {
+                {/* On a wide screen the guide stops being a narrow ribbon with two
+                empty margins. Two columns halve the scrolling and, just as
+                important, keep the line length readable: text stretched across
+                1400 px is worse than text in a column, not better. */}
+            {order.map((id) => {
                   const Icon = SECTION_ICON[id];
                   return (
                     <li key={id}>
@@ -854,7 +891,11 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               </button>
             ) : null}
 
-            {ORDER[data.phase].map((id) => {
+            {/* On a wide screen the guide stops being a narrow ribbon with two
+                empty margins. Two columns halve the scrolling and, just as
+                important, keep the line length readable: text stretched across
+                1400 px is worse than text in a column, not better. */}
+            {order.map((id) => {
               /* Hidden, never unmounted: `print:block` puts every section back
                  on paper regardless of what is on screen. */
               /* While the guest is typing, the sections that can actually
@@ -863,7 +904,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               const searchable = id === "places" || id === "faq";
               /* Reading mode is the old continuous page: everything stacked, in
                  the order the phase dictates. */
-              const openOnLarge = reading ? true : searching ? searchable : (active ?? ORDER[data.phase][0]) === id;
+              const openOnLarge = reading ? true : searching ? searchable : (active ?? order[0]) === id;
               const openOnSmall = reading ? true : searching ? searchable : active === id;
               const classes = [
                 openOnSmall ? "" : "hidden",
@@ -892,7 +933,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 printing three sections is what a guest who puts a sheet of
                 paper in their pocket actually does. */}
             <div className="mt-3 flex flex-wrap gap-2">
-              {ORDER[data.phase].map((id) => (
+              {order.map((id) => (
                 <button
                   key={id}
                   type="button"
