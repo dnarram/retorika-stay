@@ -81,20 +81,18 @@ export const propertySchema = z.object({
 });
 export type Property = z.infer<typeof propertySchema>;
 
-/* The bar a guide has to clear before it can be published. Deliberately low:
-   the address, a way in and someone to call. Everything else can be added
-   later, and the completeness meter already nudges the host towards it. */
-export function publishBlockers(property: {
-  name: string;
-  address: string;
-  hostName: string;
-  hostPhone: string;
-}): string[] {
+/* The bar a guide has to clear before it can be published.
+
+   It only asks for what the app cannot know on its own and what a guide is
+   useless without: which flat this is and where it is. The host's name comes
+   from their account, and their phone belongs in the emergency contacts, where
+   the host decides whether to publish it at all — asking for it twice, as a
+   blocking requirement, with no field to type it in, was a requirement invented
+   for the schema's convenience rather than the host's. */
+export function publishBlockers(property: { name: string; address: string }): string[] {
   const missing: string[] = [];
   if (property.name.trim().length < 2) missing.push("el nombre del alojamiento");
   if (property.address.trim().length < 4) missing.push("la dirección");
-  if (property.hostName.trim().length < 2) missing.push("tu nombre");
-  if (property.hostPhone.trim().length < 6) missing.push("tu teléfono");
   return missing;
 }
 

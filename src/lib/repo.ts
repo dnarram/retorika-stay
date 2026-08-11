@@ -19,6 +19,7 @@ export type Host = { id: string; email: string; name: string; passwordHash: stri
 export interface Repo {
   mode: "postgres" | "demo";
   getHostByEmail(email: string): Promise<Host | null>;
+  getHostById(id: string): Promise<Host | null>;
   listProperties(hostId: string): Promise<Property[]>;
   getProperty(id: string): Promise<Property | null>;
   getPropertyBySlug(slug: string): Promise<Property | null>;
@@ -70,6 +71,9 @@ const demoRepo: Repo = {
   mode: "demo",
   async getHostByEmail(email) {
     return memory.hosts.find((h) => h.email === email.toLowerCase()) ?? null;
+  },
+  async getHostById(id) {
+    return memory.hosts.find((h) => h.id === id) ?? null;
   },
   async listProperties(hostId) {
     return memory.properties.filter((p) => p.hostId === hostId);
@@ -254,6 +258,13 @@ const pgRepo: Repo = {
     const sql = getSql();
     const rows = await sql<{ id: string; email: string; name: string; password_hash: string }[]>`
       select id, email, name, password_hash from hosts where email = ${email.toLowerCase()} limit 1`;
+    const row = rows[0];
+    return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.password_hash } : null;
+  },
+  async getHostById(id) {
+    const sql = getSql();
+    const rows = await sql<{ id: string; email: string; name: string; password_hash: string }[]>`
+      select id, email, name, password_hash from hosts where id = ${id} limit 1`;
     const row = rows[0];
     return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.password_hash } : null;
   },

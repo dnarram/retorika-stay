@@ -922,7 +922,15 @@ export default function Editor({
                     <span className={check.done ? "text-ok-ink" : "text-muted"}>
                       {check.done ? <IconCheck size={16} /> : <IconCross size={16} />}
                     </span>
-                    <span className={check.done ? "text-muted line-through" : ""}>{check.label}</span>
+                    <span className={check.done ? "text-muted line-through" : ""}>
+                      {check.label}
+                      {!check.done && check.progress ? (
+                        <span className="text-muted">
+                          {" "}
+                          · {check.progress.current} de {check.progress.target}
+                        </span>
+                      ) : null}
+                    </span>
                   </button>
                 </li>
               ))}

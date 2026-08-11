@@ -47,13 +47,17 @@ export async function POST(request: Request) {
   }
 
   const repo = getRepo();
+  /* The host is logged in, so their name is already known: asking for it again
+     is friction with nothing on the other side. */
+  const account = await repo.getHostById(hostId);
+
   const property: Property = {
     id: `prop_${nanoid(10)}`,
     hostId,
     /* Unguessable slug: the guide is reachable by link, not by guessing. */
     slug: nanoid(8),
     ...parsed.data,
-    hostName: "",
+    hostName: account?.name ?? "",
     hostPhone: "",
     wifiSsid: "",
     wifiPassword: "",
