@@ -112,8 +112,58 @@ h3,
   }
 }
 
-/* Wide screens: the recommendation list becomes two columns instead of one very
-   long one. Cards never split across a column boundary. */
+/* ---------------------------------------------------------------------------
+   Continuous two-column flow for reading mode and for paper.
+
+   The first attempt used a CSS grid, which aligns items row by row: a short
+   section beside a long one left a hole the height of the difference, and the
+   guest had to scroll past white space to reach the rest. Multi-column flow
+   fills the space instead — content spills from the bottom of one column into
+   the top of the next, exactly like a newspaper, and the browser balances the
+   two heights on its own.
+
+   Clarity still wins over density where the two conflict:
+     · a card never splits across a column or a page;
+     · a section heading never sits alone at the foot of a column;
+     · nested columns are switched off inside the flow — two levels of columns
+       is where "dense" turns into "unreadable".
+--------------------------------------------------------------------------- */
+/* Screen columns belong to reading mode only: in section mode a single open
+   section split down the middle would read worse, not better. Paper always
+   flows in two columns, whichever mode the guest happens to be in. */
+@media (min-width: 1024px) {
+  .guide-flow--screen {
+    columns: 2;
+    column-gap: 2.5rem;
+  }
+}
+
+.guide-flow > * {
+  /* sections themselves may break; their cards may not */
+  break-inside: auto;
+}
+
+.guide-flow h2 {
+  break-after: avoid;
+}
+
+.guide-flow .print-block,
+.guide-flow li,
+.guide-flow figure {
+  break-inside: avoid;
+}
+
+.guide-flow section {
+  margin-top: 0;
+  margin-bottom: 1.75rem;
+}
+
+.guide-flow .wide-two-col {
+  columns: 1;
+}
+
+/* Recommendations are the longest list in the guide: on a wide screen they get
+   their own two columns when the rest of the page is not already flowing. */
 @media (min-width: 1024px) {
   .wide-two-col {
     columns: 2;
@@ -122,5 +172,31 @@ h3,
   .wide-two-col > * {
     break-inside: avoid;
     margin-bottom: 0.75rem;
+  }
+}
+
+/* Paper: two columns, tighter type and no decorative padding. A guide that
+   takes six sheets instead of eleven is a guide people actually print. */
+@media print {
+  .guide-flow {
+    columns: 2;
+    column-gap: 1.2cm;
+  }
+  body {
+    font-size: 10pt;
+    line-height: 1.35;
+  }
+  .print-block {
+    padding: 0.5rem 0.7rem !important;
+    border-color: #bbb;
+  }
+  h1 {
+    font-size: 16pt;
+  }
+  h2 {
+    font-size: 12pt;
+  }
+  @page {
+    margin: 1.2cm;
   }
 }

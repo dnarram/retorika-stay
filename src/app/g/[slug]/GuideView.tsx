@@ -851,10 +851,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             </ul>
           </nav>
 
-          <div className={reading ? "lg:grid lg:grid-cols-2 lg:items-start lg:gap-6" : undefined}>
+          <div className={reading ? "guide-flow guide-flow--screen" : "guide-flow"}>
             {/* Small and medium screens: the hub. Two columns on a phone, four
                 on a tablet, where there is room to show them all at once. */}
-            <div className={`no-print lg:col-span-2 lg:hidden ${active || searching || reading ? "hidden" : ""}`}>
+            <div className={`no-print lg:hidden ${active || searching || reading ? "hidden" : ""}`}>
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {/* On a wide screen the guide stops being a narrow ribbon with two
                 empty margins. Two columns halve the scrolling and, just as
