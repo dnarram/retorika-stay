@@ -12,7 +12,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Parámetro data ausente o demasiado largo" }, { status: 400 });
   }
 
-  const svg = await QRCode.toString(data, {
+  /* A QR encoding "/g/abc123" is useless: a phone camera reads it as plain text,
+     not as a link. Callers pass a path because a plain <a download> has no way
+     to know the origin, so the absolute URL is built here, once, for every call
+     site at the same time. */
+  const payload = data.startsWith("/") ? new URL(data, request.url).toString() : data;
+
+  const svg = await QRCode.toString(payload, {
     type: "svg",
     margin: 1,
     width: Math.min(Math.max(size, 120), 800),

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentHostId } from "@/lib/auth";
 import { getRepo } from "@/lib/repo";
-import { LOCALES, propertyPatchSchema } from "@/lib/schema";
+import { LOCALES, propertyPatchSchema, publishBlockers } from "@/lib/schema";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const hostId = await currentHostId();
@@ -19,6 +19,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const parsed = propertyPatchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Datos no válidos", detail: parsed.error.flatten() }, { status: 422 });
+  }
+
+  /* Publishing is the moment the guide stops being private, so it is the moment
+     to check it is worth showing. Refusing here with a readable list beats
+     refusing on every keystroke. */
+  if (parsed.data.published === true) {
+    const merged = { ...property, ...parsed.data };
+    const missing = publishBlockers(merged);
+    if (missing.length > 0) {
+      return NextResponse.json(
+        { error: `Antes de publicar, completa: ${missing.join(", ")}.`, missing },
+        { status: 422 },
+      );
+    }
   }
 
   /* When the access code changes we stamp the date: that is what lets us warn

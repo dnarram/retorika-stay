@@ -54,7 +54,8 @@ export default function Editor({
   const [assist, setAssist] = useState<string | null>(null);
   const [locale, setLocale] = useState<Locale>(initialProperty.defaultLocale);
   const [step, setStep] = useState(1);
-  const [save, setSave] = useState<SaveState>("idle");
+  const [saveState, setSave] = useState<SaveState>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -70,10 +71,13 @@ export default function Editor({
 
   /* Debounced autosave: typing must not fire one request per keystroke, but a
      save button the host forgets to press is worse. */
-  const persist = useCallback(
-    (nextProperty: Property, nextGuide: GuideRecord | undefined) => {
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(async () => {
+  /* One save routine, two triggers: a debounced one while typing and an
+     immediate one at every moment the host could reasonably expect their work
+     to be safe — changing step, publishing, leaving the page. Anything less and
+     a closed tab loses the last sentence. */
+  const save = useCallback(
+    async (nextProperty: Property, nextGuide: GuideRecord | undefined) => {
+      {
         setSave("saving");
         try {
           const calls: Promise<Response>[] = [
@@ -110,21 +114,67 @@ export default function Editor({
             );
           }
           const results = await Promise.all(calls);
-          setSave(results.every((r) => r.ok) ? "saved" : "error");
+          const failed = results.find((r) => !r.ok);
+          if (!failed) {
+            setSave("saved");
+            return true;
+          }
+          /* The API explains what is wrong; showing "could not save" and
+             swallowing that explanation is how a bug hides for days. */
+          const payload = (await failed.json().catch(() => null)) as { error?: string } | null;
+          setSave("error");
+          setSaveError(payload?.error ?? "No se pudo guardar. Revisa los datos de este paso.");
+          return false;
         } catch {
           setSave("error");
+          setSaveError("Sin conexión con el servidor.");
+          return false;
         }
-      }, 900);
+      }
     },
     [],
   );
 
+  const persist = useCallback(
+    (nextProperty: Property, nextGuide: GuideRecord | undefined) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => void save(nextProperty, nextGuide), 900);
+    },
+    [save],
+  );
+
+  /* Cancels the pending debounce and writes now. Returns whether it worked, so
+     the publish switch can refuse to flip when the API says no. */
+  const saveNow = useCallback(async () => {
+    if (timer.current) clearTimeout(timer.current);
+    return save(property, guide);
+  }, [save, property, guide]);
+
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  /* Every route into another step goes through here, so there is exactly one
+     place where "moving on saves your work" is true. */
+  const goToStep = async (next: number) => {
+    await saveNow();
+    setStep(next);
+  };
 
   const patchProperty = (patch: Partial<Property>) => {
     const next = { ...property, ...patch };
     setProperty(next);
+    setSaveError(null);
     persist(next, guide);
+  };
+
+  /* Publishing writes immediately and rolls the switch back if the API refuses,
+     so the checkbox can never show a state the server does not have. */
+  const setPublished = async (value: boolean) => {
+    const next = { ...property, published: value };
+    setProperty(next);
+    setSaveError(null);
+    if (timer.current) clearTimeout(timer.current);
+    const ok = await save(next, guide);
+    if (!ok) setProperty({ ...property, published: !value });
   };
 
   const patchGuide = (patch: Partial<Guide>) => {
@@ -265,21 +315,6 @@ export default function Editor({
     await fetch(`/api/stays/${id}`, { method: "DELETE" });
   }
 
-  async function translate(to: Locale) {
-    setMessage(`Traduciendo al ${LOCALE_NAMES[to]}…`);
-    const response = await fetch("/api/translate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ propertyId: property.id, from: property.defaultLocale, to }),
-    });
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setMessage(payload.error ?? "No se pudo traducir.");
-      return;
-    }
-    setMessage(`Traducido al ${LOCALE_NAMES[to]}. Queda marcado como borrador hasta que lo repases.`);
-    window.location.reload();
-  }
 
   const guideUrl =
     typeof window === "undefined" ? "" : `${window.location.origin}/g/${property.slug}`;
@@ -300,10 +335,28 @@ export default function Editor({
           {/* The publish button lives in the header, visible from every step:
               it is the one action the host is working towards, and burying it
               in step 7 made it invisible. It disappears once published. */}
+          {/* The host writes in one language and the rest are generated on
+              publish. Asking them to "review" a language they may not speak was
+              a permanent, impossible chore in their dashboard. */}
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted">Idioma de la guía</span>
+            <select
+              value={property.defaultLocale}
+              onChange={(event) => patchProperty({ defaultLocale: event.target.value as Locale })}
+              className="rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-brand"
+            >
+              {LOCALES.map((code) => (
+                <option key={code} value={code}>
+                  {LOCALE_NAMES[code]}
+                </option>
+              ))}
+            </select>
+          </label>
+
           {!property.published ? (
             <button
               type="button"
-              onClick={() => patchProperty({ published: true })}
+              onClick={() => void setPublished(true)}
               className="rounded-full bg-brand px-5 py-2.5 text-sm font-medium text-white"
             >
               Publicar guía
@@ -316,11 +369,14 @@ export default function Editor({
         <div className="text-right text-sm">
           <p className="font-medium">{progress.score}% completada</p>
           <p className="text-muted">
-            {save === "saving" ? "Guardando…" : null}
-            {save === "saved" ? "Cambios guardados" : null}
-            {save === "error" ? "No se pudo guardar" : null}
-            {save === "idle" ? "Autoguardado activo" : null}
+            {saveState === "saving" ? "Guardando…" : null}
+            {saveState === "saved" ? "Cambios guardados" : null}
+            {saveState === "error" ? "No se pudo guardar" : null}
+            {saveState === "idle" ? "Autoguardado activo" : null}
           </p>
+          {saveError ? (
+            <p className="mt-1 max-w-[260px] text-xs text-alert-ink">{saveError}</p>
+          ) : null}
         </div>
         </div>
       </header>
@@ -341,7 +397,7 @@ export default function Editor({
           <button
             key={label}
             type="button"
-            onClick={() => setStep(index + 1)}
+            onClick={() => void goToStep(index + 1)}
             aria-current={step === index + 1 ? "step" : undefined}
             className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium ${
               step === index + 1 ? "bg-brand text-white" : "bg-white text-muted ring-1 ring-line"
@@ -779,67 +835,20 @@ export default function Editor({
                 </button>
               </Panel>
 
-              <Panel title="Idiomas">
-                <p className="text-sm text-muted">
-                  El huésped ve la guía en el idioma de su navegador. Al publicar se generan los
-                  cuatro automáticamente y la guía avisa al huésped de que la traducción es
-                  automática: no te pedimos que revises un idioma que no hablas.
-                </p>
-                <ul className="mt-3 space-y-2">
-                  {LOCALES.map((code) => {
-                    const record = guides.find((g) => g.locale === code);
-                    return (
-                      <li
-                        key={code}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3 py-2"
-                      >
-                        <span className="text-sm font-medium">{LOCALE_NAMES[code]}</span>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                              record ? "bg-ok-soft text-ok-ink" : "bg-canvas text-muted"
-                            }`}
-                          >
-                            {record ? <IconCheck size={13} /> : <IconCross size={13} />}
-                            {record ? "Disponible" : "Sin generar"}
-                          </span>
-                          {code === property.defaultLocale ? (
-                            <span className="text-xs text-muted">tu idioma</span>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => translate(code)}
-                                className="rounded-full px-3 py-1 text-xs font-medium ring-1 ring-line"
-                              >
-                                {record ? "Regenerar" : "Generar"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setLocale(code)}
-                                className="rounded-full px-3 py-1 text-xs font-medium ring-1 ring-line"
-                              >
-                                Editar
-                              </button>
-                            </>
-                          )}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {message ? <p className="mt-3 text-sm text-brand-deep">{message}</p> : null}
-                <p className="mt-3 text-sm text-muted">
-                  Editando ahora: <strong>{LOCALE_NAMES[locale]}</strong>
-                </p>
-              </Panel>
-
               <Panel title="Publicación">
-                <label className="flex items-center gap-3 text-sm">
+                <p className="text-sm text-muted">
+                  Al publicar se generan automáticamente las versiones en{" "}
+                  {LOCALES.filter((c) => c !== property.defaultLocale)
+                    .map((c) => LOCALE_NAMES[c])
+                    .join(", ")}
+                  . No tienes que revisarlas: la guía avisa al huésped de que la traducción es
+                  automática.
+                </p>
+                <label className="mt-3 flex items-center gap-3 text-sm">
                   <input
                     type="checkbox"
                     checked={property.published}
-                    onChange={(event) => patchProperty({ published: event.target.checked })}
+                    onChange={(event) => void setPublished(event.target.checked)}
                     className="h-5 w-5 accent-[var(--color-brand)]"
                   />
                   Guía publicada y accesible por enlace (desmarca para retirarla)
@@ -882,7 +891,7 @@ export default function Editor({
           <div className="flex justify-between pt-2">
             <button
               type="button"
-              onClick={() => setStep((s) => Math.max(1, s - 1))}
+              onClick={() => void goToStep(Math.max(1, step - 1))}
               disabled={step === 1}
               className="rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line disabled:opacity-40"
             >
@@ -890,7 +899,7 @@ export default function Editor({
             </button>
             <button
               type="button"
-              onClick={() => setStep((s) => Math.min(STEPS.length, s + 1))}
+              onClick={() => void goToStep(Math.min(STEPS.length, step + 1))}
               disabled={step === STEPS.length}
               className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
             >
@@ -907,7 +916,7 @@ export default function Editor({
                 <li key={check.key}>
                   <button
                     type="button"
-                    onClick={() => setStep(check.step)}
+                    onClick={() => void goToStep(check.step)}
                     className="flex w-full items-start gap-2 text-left"
                   >
                     <span className={check.done ? "text-ok-ink" : "text-muted"}>

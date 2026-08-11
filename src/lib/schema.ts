@@ -44,17 +44,28 @@ export const contactSchema = z.object({
   detail: z.string().max(120).optional(),
 });
 
+/* A draft is allowed to be incomplete.
+
+   The first version enforced minimum lengths here (hostName >= 2, hostPhone >=
+   6...), which meant a freshly created property — whose fields are empty by
+   design — failed validation on every single autosave. The editor showed
+   "could not save" and nothing persisted, including the publish flag.
+
+   The rule that was wrong is the placement, not the requirement: storage
+   accepts a half-written draft, and the bar for PUBLISHING is enforced in the
+   publish path (see publishableProperty below). Formats that would corrupt data
+   are still enforced here — coordinates, times, PIN shape, enums. */
 export const propertySchema = z.object({
   id: z.string(),
   hostId: z.string(),
   slug: z.string().min(6),
-  name: z.string().min(2).max(80),
-  city: z.string().min(2).max(80),
-  address: z.string().min(4).max(160),
+  name: z.string().max(80),
+  city: z.string().max(80),
+  address: z.string().max(160),
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
-  hostName: z.string().min(2).max(60),
-  hostPhone: z.string().min(6).max(32),
+  hostName: z.string().max(60),
+  hostPhone: z.string().max(32),
   wifiSsid: z.string().max(64),
   wifiPassword: z.string().max(64),
   wifiSecurity: z.enum(["WPA", "WEP", "nopass"]).default("WPA"),
@@ -66,12 +77,29 @@ export const propertySchema = z.object({
   contacts: z.array(contactSchema).max(12),
   defaultLocale: localeSchema,
   published: z.boolean(),
-  pin: z.string().regex(/^\d{4}$/).nullable(),
+  pin: z.string().regex(/^\d{4}$/).nullable().or(z.literal("")).transform((v) => (v === "" ? null : v)),
 });
 export type Property = z.infer<typeof propertySchema>;
 
+/* The bar a guide has to clear before it can be published. Deliberately low:
+   the address, a way in and someone to call. Everything else can be added
+   later, and the completeness meter already nudges the host towards it. */
+export function publishBlockers(property: {
+  name: string;
+  address: string;
+  hostName: string;
+  hostPhone: string;
+}): string[] {
+  const missing: string[] = [];
+  if (property.name.trim().length < 2) missing.push("el nombre del alojamiento");
+  if (property.address.trim().length < 4) missing.push("la dirección");
+  if (property.hostName.trim().length < 2) missing.push("tu nombre");
+  if (property.hostPhone.trim().length < 6) missing.push("tu teléfono");
+  return missing;
+}
+
 export const ruleSchema = z.object({
-  text: z.string().min(2).max(160),
+  text: z.string().max(160),
   /* true = allowed, false = forbidden, null = nuance. Icon and colour are
      derived from this, not from parsing the text, and colour is never the only
      signal carrying the meaning. */
@@ -102,7 +130,7 @@ export const placeSchema = z.object({
   id: z.string(),
   propertyId: z.string(),
   category: placeCategorySchema,
-  name: z.string().min(2).max(80),
+  name: z.string().max(80),
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
   price: z.number().int().min(1).max(3).nullable(),
