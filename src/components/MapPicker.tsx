@@ -35,6 +35,7 @@ export default function MapPicker({ lat, lng, seedQuery, near, label, onPick }: 
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const markerRef = useRef<import("leaflet").Marker | null>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
 
   const [query, setQuery] = useState(seedQuery ?? "");
   const [results, setResults] = useState<GeoResult[]>([]);
@@ -78,13 +79,22 @@ export default function MapPicker({ lat, lng, seedQuery, near, label, onPick }: 
 
       mapRef.current = map;
       markerRef.current = marker;
-      /* Leaflet measures its container on creation; inside a panel that was
-         hidden a moment ago it reads zero and renders grey tiles. */
+
+      /* Leaflet measures its container once, on creation. Inside a <details>
+         that is still closed that measurement is zero, and the map stays blank
+         after the host opens it. Watching the box covers every case — opening a
+         panel, rotating a phone, resizing a window — with one observer instead
+         of a timer per situation. */
+      const observer = new ResizeObserver(() => map.invalidateSize());
+      if (container.current) observer.observe(container.current);
+      observerRef.current = observer;
       setTimeout(() => map.invalidateSize(), 60);
     })();
 
     return () => {
       cancelled = true;
+      observerRef.current?.disconnect();
+      observerRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -186,12 +196,13 @@ export default function MapPicker({ lat, lng, seedQuery, near, label, onPick }: 
         </ul>
       ) : null}
 
-      <div
-        ref={container}
-        className="mt-3 h-64 overflow-hidden rounded-xl border border-line"
-        role="application"
-        aria-label={label}
-      />
+      {/* The sized box has to be the PARENT of the element Leaflet takes over:
+          globals.css sets .leaflet-container { height: 100% }, so putting h-64
+          on the map element itself made that 100% resolve against an auto-height
+          parent — zero pixels, and all the host saw was a grey line. */}
+      <div className="mt-3 h-64 overflow-hidden rounded-xl border border-line sm:h-80">
+        <div ref={container} role="application" aria-label={label} />
+      </div>
 
       <p className="mt-2 flex items-start gap-1.5 text-xs text-muted">
         <IconArrow size={13} className="mt-0.5 shrink-0" />
