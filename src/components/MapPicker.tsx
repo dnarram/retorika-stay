@@ -139,9 +139,27 @@ export default function MapPicker({ lat, lng, seedQuery, near, label, onPick }: 
       setStatus("No se pudo buscar. Coloca el punto en el mapa a mano.");
       return;
     }
-    const { results: found } = (await response.json()) as { results: GeoResult[] };
-    setStatus(found.length === 0 ? "Sin resultados. Prueba con menos detalle." : null);
+    const { results: found, precision } = (await response.json()) as {
+      results: GeoResult[];
+      precision?: "exact" | "street" | "town";
+    };
+
+    /* Saying "we found the street but not the number" is far more useful than
+       "not found": it tells the host the address is right and that the last
+       twenty metres are theirs to place. */
+    setStatus(
+      found.length === 0
+        ? "Sin resultados. Prueba con menos detalle, o coloca el punto en el mapa a mano."
+        : precision === "street"
+          ? "No encontramos ese número, pero sí la calle. Arrastra el punto hasta el portal."
+          : precision === "town"
+            ? "No encontramos esa calle. Te dejamos en la población: sitúa el punto en el mapa."
+            : null,
+    );
     setResults(found);
+    /* With a single candidate there is nothing to choose: take it and let the
+       host adjust the pin. */
+    if (found.length === 1) await choose(found[0]);
   }
 
   async function choose(result: GeoResult) {

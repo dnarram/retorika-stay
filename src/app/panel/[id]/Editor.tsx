@@ -253,8 +253,14 @@ export default function Editor({
     setNearbyStatus("Buscando sitios cerca…");
     const response = await fetch(`/api/nearby?lat=${property.lat}&lng=${property.lng}`);
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      setNearbyStatus(payload?.error ?? "No se pudieron buscar sitios cercanos.");
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; detail?: string }
+        | null;
+      setNearbyStatus(
+        [payload?.error ?? "No se pudieron buscar sitios cercanos.", payload?.detail]
+          .filter(Boolean)
+          .join(" — "),
+      );
       return;
     }
     const { places: found } = (await response.json()) as { places: NearbyPlace[] };
