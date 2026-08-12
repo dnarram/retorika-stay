@@ -2,12 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { IconArrow, IconCheck, IconCross, IconInfo, IconQr, IconTrash } from "./editor-icons";
 import type { GuideRecord } from "@/data/seed";
-import { LOCALE_NAMES } from "@/i18n/dictionaries";
+import { LOCALE_NAMES, getDictionary } from "@/i18n/dictionaries";
 import type { Check } from "@/lib/completeness";
+import { suggestedContacts } from "@/lib/emergency";
+import type { NearbyPlace } from "@/app/api/nearby/route";
 import { completeness } from "@/lib/completeness";
 import {
+  CONTACT_KINDS,
   LOCALES,
   type Stay,
   PLACE_CATEGORIES,
@@ -17,6 +21,12 @@ import {
   type PlaceCategory,
   type Property,
 } from "@/lib/schema";
+
+/* Leaflet touches `window`, so the picker only exists in the browser. */
+const MapPicker = dynamic(() => import("@/components/MapPicker"), {
+  ssr: false,
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-brand-soft" />,
+});
 
 const STEPS = [
   "Datos del alojamiento",
@@ -50,8 +60,10 @@ export default function Editor({
   const [guides, setGuides] = useState(initialGuides);
   const [places, setPlaces] = useState(initialPlaces);
   const [stays, setStays] = useState(initialStays);
-  const [geo, setGeo] = useState<string | null>(null);
   const [assist, setAssist] = useState<string | null>(null);
+  const [country, setCountry] = useState<string | undefined>(undefined);
+  const [nearby, setNearby] = useState<NearbyPlace[] | null>(null);
+  const [nearbyStatus, setNearbyStatus] = useState<string | null>(null);
   const [locale, setLocale] = useState<Locale>(initialProperty.defaultLocale);
   const [step, setStep] = useState(1);
   const [saveState, setSave] = useState<SaveState>("idle");
@@ -59,9 +71,29 @@ export default function Editor({
   const [message, setMessage] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /* The editor speaks the language of the guide being written: showing
+     "restaurant" and "sights" to a host writing in Spanish was a leak of our
+     internal enum into their screen. */
+  const t = getDictionary(locale);
+
   const guide = useMemo(
     () => guides.find((g) => g.locale === locale) ?? guides[0],
     [guides, locale],
+  );
+
+  /* The country comes from the pin the host already placed: no extra question,
+     and the numbers are right for the address rather than for our assumptions. */
+  const suggestions = useMemo(() => {
+    const already = new Set(property.contacts.map((c) => c.phone.replace(/\s/g, "")));
+    return suggestedContacts(country).filter((s) => !already.has(s.phone.replace(/\s/g, "")));
+  }, [country, property.contacts]);
+
+  const countryName = useMemo(
+    () =>
+      country
+        ? new Intl.DisplayNames([locale], { type: "region" }).of(country) ?? country
+        : "",
+    [country, locale],
   );
 
   const progress = useMemo(
@@ -152,6 +184,22 @@ export default function Editor({
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
+  /* Resolve the country once on load, so the emergency suggestions are there
+     before the host reaches step 6 without them having to touch the map. */
+  useEffect(() => {
+    if (country || !property.lat) return;
+    fetch(`/api/geocode?lat=${property.lat}&lng=${property.lng}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { results?: { countryCode: string }[] } | null) => {
+        const code = payload?.results?.[0]?.countryCode;
+        if (code) setCountry(code);
+      })
+      .catch(() => {
+        /* offline or rate limited: the host can still type numbers by hand */
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* Every route into another step goes through here, so there is exactly one
      place where "moving on saves your work" is true. */
   const goToStep = async (next: number) => {
@@ -198,6 +246,49 @@ export default function Editor({
     });
   }
 
+  /* One tap turns a nearby result into a recommendation with its coordinates
+     already right. The host only writes the sentence that makes it a
+     recommendation rather than a map pin. */
+  async function loadNearby() {
+    setNearbyStatus("Buscando sitios cerca…");
+    const response = await fetch(`/api/nearby?lat=${property.lat}&lng=${property.lng}`);
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      setNearbyStatus(payload?.error ?? "No se pudieron buscar sitios cercanos.");
+      return;
+    }
+    const { places: found } = (await response.json()) as { places: NearbyPlace[] };
+    const already = new Set(places.map((p) => p.name.toLowerCase()));
+    const fresh = found.filter((p) => !already.has(p.name.toLowerCase()));
+    setNearby(fresh);
+    setNearbyStatus(fresh.length === 0 ? "No encontramos sitios nuevos cerca." : null);
+  }
+
+  async function addNearby(candidate: NearbyPlace) {
+    setNearby((current) => current?.filter((p) => p.name !== candidate.name) ?? null);
+    const response = await fetch("/api/places", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        propertyId: property.id,
+        place: {
+          category: candidate.category,
+          name: candidate.name,
+          lat: candidate.lat,
+          lng: candidate.lng,
+          price: null,
+          url: null,
+          phone: null,
+          notes: { [locale]: { tagline: "", note: "" } },
+        },
+      }),
+    });
+    if (response.ok) {
+      const { place } = (await response.json()) as { place: Place };
+      setPlaces((current) => [...current, place]);
+    }
+  }
+
   async function addPlace() {
     const response = await fetch("/api/places", {
       method: "POST",
@@ -227,27 +318,6 @@ export default function Editor({
     await fetch(`/api/places/${id}`, { method: "DELETE" });
   }
 
-  /* Type the address, get the coordinates. The host never sees a latitude field
-     again. */
-  async function locate() {
-    setGeo("Buscando…");
-    const response = await fetch(
-      `/api/geocode?q=${encodeURIComponent(`${property.address}, ${property.city}`)}`,
-    );
-    if (!response.ok) {
-      setGeo("No se encontró la dirección. Puedes ajustar las coordenadas a mano.");
-      return;
-    }
-    const { results } = (await response.json()) as {
-      results: { lat: number; lng: number; label: string }[];
-    };
-    if (!results[0]) {
-      setGeo("Sin resultados. Prueba a añadir el número y el código postal.");
-      return;
-    }
-    patchProperty({ lat: results[0].lat, lng: results[0].lng });
-    setGeo(results[0].label);
-  }
 
   /* The assistant REORGANISES what the host wrote; it never adds facts. The
      suggestion is shown for them to accept or discard, and is never saved on
@@ -415,27 +485,24 @@ export default function Editor({
               <Field label="Nombre" value={property.name} onChange={(v) => patchProperty({ name: v })} />
               <Field label="Ciudad" value={property.city} onChange={(v) => patchProperty({ city: v })} />
               <Field label="Dirección" value={property.address} onChange={(v) => patchProperty({ address: v })} />
-              <button
-                type="button"
-                onClick={locate}
-                className="rounded-full px-4 py-2 text-sm font-medium ring-1 ring-brand-line"
-              >
-                Buscar coordenadas desde la dirección
-              </button>
-              {geo ? <p className="text-xs text-muted">{geo}</p> : null}
-              <div className="grid grid-cols-2 gap-3">
-                <Field
-                  label="Latitud"
-                  value={String(property.lat)}
-                  onChange={(v) => patchProperty({ lat: Number(v) || property.lat })}
-                  hint="De estas coordenadas salen el mapa y los minutos a pie."
-                />
-                <Field
-                  label="Longitud"
-                  value={String(property.lng)}
-                  onChange={(v) => patchProperty({ lng: Number(v) || property.lng })}
-                />
-              </div>
+              <MapPicker
+                lat={property.lat}
+                lng={property.lng}
+                seedQuery={`${property.address}, ${property.city}`}
+                label="Sitúa tu alojamiento en el mapa"
+                onPick={(pick) => {
+                  const patch: Partial<Property> = { lat: pick.lat, lng: pick.lng };
+                  /* The address field follows the pin only while it is empty:
+                     overwriting what the host wrote would be rude, and their
+                     wording ("portal azul, 4.º izquierda") is often better than
+                     the map's. */
+                  if (pick.label && !property.address.trim()) patch.address = pick.label;
+                  if (pick.city && !property.city.trim()) patch.city = pick.city;
+                  if (pick.countryCode) setCountry(pick.countryCode);
+                  patchProperty(patch);
+                }}
+              />
+
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Entrada desde" value={property.checkinFrom} onChange={(v) => patchProperty({ checkinFrom: v })} />
                 <Field label="Salida antes de" value={property.checkoutUntil} onChange={(v) => patchProperty({ checkoutUntil: v })} />
@@ -592,9 +659,49 @@ export default function Editor({
           {step === 5 ? (
             <Panel title="Recomendaciones">
               <p className="text-sm text-muted">
-                Las distancias y los minutos a pie se calculan solos desde las coordenadas. Lo que no
-                se puede calcular es tu nota personal: eso es lo que hace útil la lista.
+                Las distancias y los minutos a pie se calculan solos. Lo que no se puede calcular es
+                tu nota personal: eso es lo que hace útil la lista.
               </p>
+
+              <div className="mt-4 rounded-xl bg-brand-soft p-3">
+                <button
+                  type="button"
+                  onClick={loadNearby}
+                  className="rounded-full bg-white px-4 py-2 text-sm font-medium text-brand-deep ring-1 ring-brand-line"
+                >
+                  Ver sitios populares cerca del alojamiento
+                </button>
+                <p className="mt-2 text-xs text-brand-ink">
+                  Salen de OpenStreetMap, ordenados por lo cerca que están. Añade los que ya
+                  recomiendas y escribe solo tu nota.
+                </p>
+                {nearbyStatus ? <p className="mt-2 text-xs text-muted">{nearbyStatus}</p> : null}
+                {nearby && nearby.length > 0 ? (
+                  <ul className="mt-3 max-h-60 space-y-1 overflow-auto">
+                    {nearby.map((candidate) => (
+                      <li
+                        key={`${candidate.name}-${candidate.lat}`}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-sm"
+                      >
+                        <span className="min-w-0">
+                          <span className="font-medium">{candidate.name}</span>
+                          <span className="block text-xs text-muted">
+                            {t.categories[candidate.category]} · {candidate.walkMin} min a pie
+                            {candidate.cuisine ? ` · ${candidate.cuisine}` : ""}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => addNearby(candidate)}
+                          className="shrink-0 rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white"
+                        >
+                          Añadir
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
               <ul className="mt-4 space-y-4">
                 {places.map((place) => (
                   <li key={place.id} className="rounded-xl border border-line p-4">
@@ -611,14 +718,27 @@ export default function Editor({
                         >
                           {PLACE_CATEGORIES.map((category) => (
                             <option key={category} value={category}>
-                              {category}
+                              {t.categories[category]}
                             </option>
                           ))}
                         </select>
                       </label>
-                      <Field label="Latitud" value={String(place.lat)} onChange={(v) => savePlace({ ...place, lat: Number(v) || place.lat })} />
-                      <Field label="Longitud" value={String(place.lng)} onChange={(v) => savePlace({ ...place, lng: Number(v) || place.lng })} />
                     </div>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-sm font-medium text-brand-deep">
+                        Ajustar la ubicación en el mapa
+                      </summary>
+                      <div className="mt-2">
+                        <MapPicker
+                          lat={place.lat}
+                          lng={place.lng}
+                          seedQuery={place.name}
+                          near={{ lat: property.lat, lng: property.lng }}
+                          label={`Dónde está ${place.name}`}
+                          onPick={(pick) => savePlace({ ...place, lat: pick.lat, lng: pick.lng })}
+                        />
+                      </div>
+                    </details>
                     <Field
                       label={`Titular (${locale})`}
                       value={place.notes[locale]?.tagline ?? ""}
@@ -678,9 +798,44 @@ export default function Editor({
               </Panel>
               <Panel title="Emergencias">
                 <p className="text-sm text-muted">
-                  El 112 aparece siempre. Añade tu teléfono, una farmacia y el centro de salud más
-                  cercano.
+                  Añade tu teléfono y los servicios que quieras que tu huésped tenga a mano.
                 </p>
+
+                {suggestions.length > 0 ? (
+                  <div className="mt-3 rounded-xl bg-brand-soft p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-brand-ink">
+                      Números oficiales de {countryName}
+                    </p>
+                    <p className="mt-1 text-xs text-brand-ink">
+                      Salen de dónde has situado el alojamiento. Añade los que quieras mostrar: un
+                      número de emergencia en una guía es una promesa, y la decides tú.
+                    </p>
+                    <ul className="mt-2 flex flex-wrap gap-2">
+                      {suggestions.map((suggestion) => (
+                        <li key={`${suggestion.kind}-${suggestion.phone}`}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              patchProperty({
+                                contacts: [
+                                  ...property.contacts,
+                                  {
+                                    kind: suggestion.kind,
+                                    phone: suggestion.phone,
+                                    detail: suggestion.detail,
+                                  },
+                                ],
+                              })
+                            }
+                            className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-brand-deep ring-1 ring-brand-line"
+                          >
+                            + {suggestion.phone} · {suggestion.detail}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <ul className="mt-3 space-y-2">
                   {property.contacts.map((contact, index) => (
                     <li key={index} className="grid gap-2 sm:grid-cols-[130px_1fr_1fr_auto]">
@@ -693,9 +848,9 @@ export default function Editor({
                         }}
                         className="rounded-xl border border-line px-3 py-2 text-sm"
                       >
-                        {["emergency", "police", "health", "pharmacy", "taxi", "host", "maintenance"].map((kind) => (
+                        {CONTACT_KINDS.map((kind) => (
                           <option key={kind} value={kind}>
-                            {kind}
+                            {t.contacts[kind]}
                           </option>
                         ))}
                       </select>
