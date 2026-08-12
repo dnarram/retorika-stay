@@ -64,6 +64,7 @@ export default function Editor({
   const [country, setCountry] = useState<string | undefined>(undefined);
   const [nearby, setNearby] = useState<NearbyPlace[] | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<string | null>(null);
+  const [nearbyFailed, setNearbyFailed] = useState(false);
   const [locale, setLocale] = useState<Locale>(initialProperty.defaultLocale);
   const [step, setStep] = useState(1);
   const [saveState, setSave] = useState<SaveState>("idle");
@@ -249,9 +250,12 @@ export default function Editor({
   /* One tap turns a nearby result into a recommendation with its coordinates
      already right. The host only writes the sentence that makes it a
      recommendation rather than a map pin. */
-  async function loadNearby() {
+  async function loadNearby(radius = 700) {
     setNearbyStatus("Buscando sitios cerca…");
-    const response = await fetch(`/api/nearby?lat=${property.lat}&lng=${property.lng}`);
+    setNearbyFailed(false);
+    const response = await fetch(
+      `/api/nearby?lat=${property.lat}&lng=${property.lng}&radius=${radius}`,
+    );
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as
         | { error?: string; detail?: string }
@@ -261,6 +265,7 @@ export default function Editor({
           .filter(Boolean)
           .join(" — "),
       );
+      setNearbyFailed(true);
       return;
     }
     const { places: found } = (await response.json()) as { places: NearbyPlace[] };
@@ -672,7 +677,7 @@ export default function Editor({
               <div className="mt-4 rounded-xl bg-brand-soft p-3">
                 <button
                   type="button"
-                  onClick={loadNearby}
+                  onClick={() => loadNearby()}
                   className="rounded-full bg-white px-4 py-2 text-sm font-medium text-brand-deep ring-1 ring-brand-line"
                 >
                   Ver sitios populares cerca del alojamiento
@@ -682,6 +687,24 @@ export default function Editor({
                   recomiendas y escribe solo tu nota.
                 </p>
                 {nearbyStatus ? <p className="mt-2 text-xs text-muted">{nearbyStatus}</p> : null}
+                {nearbyFailed ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    {/* OpenStreetMap's public servers are free and occasionally
+                        busy. A retry costs the host one tap, and "Añadir sitio"
+                        below already searches any place by name — this shortcut
+                        going down never blocks the work. */}
+                    <button
+                      type="button"
+                      onClick={() => loadNearby(1200)}
+                      className="rounded-full bg-white px-3 py-1.5 font-medium text-brand-deep ring-1 ring-brand-line"
+                    >
+                      Reintentar buscando más lejos
+                    </button>
+                    <span className="text-muted">
+                      o usa «Añadir sitio» y búscalo por su nombre en el mapa.
+                    </span>
+                  </div>
+                ) : null}
                 {nearby && nearby.length > 0 ? (
                   <ul className="mt-3 max-h-60 space-y-1 overflow-auto">
                     {nearby.map((candidate) => (

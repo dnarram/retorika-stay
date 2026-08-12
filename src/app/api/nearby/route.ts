@@ -29,11 +29,21 @@ import type { PlaceCategory } from "@/lib/schema";
    endpoint is a shortcut, never a dependency.
 --------------------------------------------------------------------------- */
 
+/* Kumi first: the main instance is the busiest and was the one returning 504.
+   Nine seconds each, so all three still fit inside the function's budget —
+   the previous 25 s meant the first mirror ate the whole allowance and the
+   other two never really got their turn. */
 const MIRRORS = [
-  "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
 ];
+
+const PER_MIRROR_MS = 9000;
+
+/* Vercel kills a serverless function at its own limit regardless of what fetch
+   is waiting for, and the default is shorter than three attempts need. */
+export const maxDuration = 30;
 
 /* OSM tag → our category. Anything not listed is ignored rather than guessed
    into the wrong bucket. */
@@ -80,7 +90,7 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const lat = Number(params.get("lat"));
   const lng = Number(params.get("lng"));
-  const radius = Math.min(Math.max(Number(params.get("radius") ?? 900), 200), 3000);
+  const radius = Math.min(Math.max(Number(params.get("radius") ?? 700), 200), 2000);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
     return NextResponse.json(
@@ -89,12 +99,29 @@ export async function GET(request: Request) {
     );
   }
 
-  /* nwr = node, way and relation. `out center` returns one coordinate per
-     element, so a museum mapped as a building still gets a point. */
-  const clauses = TAGS.map(
-    (t) => `nwr["${t.key}"="${t.value}"]["name"](around:${radius},${lat},${lng});`,
-  ).join("");
-  const query = `[out:json][timeout:25];(${clauses});out center 150;`;
+  /* One clause per tag KEY, not per value.
+
+     The first version emitted seventeen separate `nwr` statements, so Overpass
+     walked its spatial index seventeen times for one answer — which is exactly
+     what produced the 504s and timeouts in production. Grouping the values into
+     a regex per key brings it down to five passes over the same area, for
+     identical results.
+
+     nwr = node, way and relation: plenty of restaurants and museums are mapped
+     as buildings rather than points. `out center` gives each one a coordinate. */
+  const byKey = new Map<string, string[]>();
+  for (const tag of TAGS) {
+    byKey.set(tag.key, [...(byKey.get(tag.key) ?? []), tag.value]);
+  }
+  const clauses = [...byKey.entries()]
+    .map(([key, values]) =>
+      `nwr["${key}"~"^(${values.join("|")})$"]["name"](around:${radius},${lat},${lng});`,
+    )
+    .join("");
+  /* timeout:15 is what we ask Overpass to spend; PER_MIRROR_MS is what we are
+     willing to wait. The first has to be the smaller of the two or the server
+     keeps working on a query nobody is listening to any more. */
+  const query = `[out:json][timeout:15];(${clauses});out center 80;`;
 
   const failures: string[] = [];
 
@@ -111,7 +138,7 @@ export async function GET(request: Request) {
         },
         body: `data=${encodeURIComponent(query)}`,
         cache: "no-store",
-        signal: AbortSignal.timeout(25000),
+        signal: AbortSignal.timeout(PER_MIRROR_MS),
       });
 
       if (!response.ok) {
