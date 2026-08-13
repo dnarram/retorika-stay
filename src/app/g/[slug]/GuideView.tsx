@@ -28,6 +28,8 @@ import {
 import { LOCALE_NAMES, getDictionary, type Dict } from "@/i18n/dictionaries";
 import type { ContactKind, Guide, Locale, Place, PlaceCategory } from "@/lib/schema";
 import type { StayPhase } from "@/lib/stay";
+import { ornamentStyle, themeVars } from "@/lib/theme";
+import type { Theme } from "@/lib/theme";
 import { wifiQrPayload } from "@/lib/wifi";
 import Helpful from "./Helpful";
 import Keepsake from "./Keepsake";
@@ -50,6 +52,7 @@ export type GuestPayload = {
   draft: boolean;
   isOwner: boolean;
   hiddenSections: string[];
+  theme: Theme;
   stay: { guestName: string | null; arrival: string; departure: string; nights: number } | null;
   autoTranslated: boolean;
   property: {
@@ -374,7 +377,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
 
   const sections: Record<SectionId, React.ReactNode> = {
     arrival: (
-      <Section id="arrival" title={t.sections.arrival} key="arrival" slug={property.slug} t={t}>
+      <Section id="arrival" title={t.sections.arrival} key="arrival" slug={property.slug} t={t} ask={!reading}>
         <Card>
           <Row icon={<IconPin size={18} />} label={t.labels.address} value={property.address} />
           <div className="mt-3 flex flex-wrap gap-2 no-print">
@@ -399,7 +402,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     entry: (
-      <Section id="entry" title={t.sections.entry} key="entry" slug={property.slug} t={t}>
+      <Section id="entry" title={t.sections.entry} key="entry" slug={property.slug} t={t} ask={!reading}>
         <Card>
           <ol className="space-y-2 text-sm">
             {guide.arrivalSteps.map((step, index) => (
@@ -450,7 +453,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     wifi: (
-      <Section id="wifi" title={t.sections.wifi} key="wifi" slug={property.slug} t={t}>
+      <Section id="wifi" title={t.sections.wifi} key="wifi" slug={property.slug} t={t} ask={!reading}>
         <Card>
           <dl className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
@@ -500,7 +503,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     house: (
-      <Section id="house" title={t.sections.house} key="house" slug={property.slug} t={t}>
+      <Section id="house" title={t.sections.house} key="house" slug={property.slug} t={t} ask={!reading}>
         <Card>
           {guide.house
             .filter((item) => item.body.trim())
@@ -520,7 +523,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     rules: (
-      <Section id="rules" title={t.sections.rules} key="rules" slug={property.slug} t={t}>
+      <Section id="rules" title={t.sections.rules} key="rules" slug={property.slug} t={t} ask={!reading}>
         <Card>
           <ul className="space-y-3">
             {guide.rules
@@ -550,7 +553,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     places: (
-      <Section id="places" title={t.sections.places} key="places" slug={property.slug} t={t}>
+      <Section id="places" title={t.sections.places} key="places" slug={property.slug} t={t} ask={!reading}>
         <div className="no-print -mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
           <Chip active={category === "todas"} onClick={() => setCategory("todas")}>
             {t.actions.seeAll}
@@ -601,7 +604,6 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 <div className="mt-3 flex flex-wrap gap-2 text-sm no-print">
                   <RouteActions
                     to={{ lat: place.lat, lng: place.lng }}
-                    from={{ lat: property.lat, lng: property.lng }}
                     t={t}
                   />
                   {place.phone ? (
@@ -651,7 +653,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     transport: (
-      <Section id="transport" title={t.sections.transport} key="transport" slug={property.slug} t={t}>
+      <Section id="transport" title={t.sections.transport} key="transport" slug={property.slug} t={t} ask={!reading}>
         <Card>
           {guide.transport
             .filter((item) => item.body.trim() || item.lat !== undefined)
@@ -663,7 +665,6 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 <div className="no-print mt-2 flex flex-wrap gap-2">
                   <RouteActions
                     to={{ lat: item.lat, lng: item.lng }}
-                    from={{ lat: property.lat, lng: property.lng }}
                     t={t}
                     defaultMode="driving"
                   />
@@ -676,7 +677,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     emergency: (
-      <Section id="emergency" title={t.sections.emergency} key="emergency" slug={property.slug} t={t}>
+      <Section id="emergency" title={t.sections.emergency} key="emergency" slug={property.slug} t={t} ask={!reading}>
         <Card>
           <p className="flex gap-2 rounded-xl bg-alert-soft p-3 text-sm text-alert-ink">
             <IconAlert size={18} />
@@ -740,7 +741,6 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                     <div className="mt-2 flex flex-wrap gap-2 no-print">
                       <RouteActions
                         to={{ lat: place.lat, lng: place.lng }}
-                        from={{ lat: property.lat, lng: property.lng }}
                         t={t}
                         defaultMode="driving"
                       />
@@ -763,7 +763,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     checkout: (
-      <Section id="checkout" title={t.sections.checkout} key="checkout" slug={property.slug} t={t}>
+      <Section id="checkout" title={t.sections.checkout} key="checkout" slug={property.slug} t={t} ask={!reading}>
         <Card>
           <p className="text-sm text-muted">
             {t.labels.checkout} <span className="font-medium text-ink">{property.checkoutUntil}</span>
@@ -790,7 +790,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     faq: (
-      <Section id="faq" title={t.sections.faq} key="faq" slug={property.slug} t={t}>
+      <Section id="faq" title={t.sections.faq} key="faq" slug={property.slug} t={t} ask={!reading}>
         <Card>
           {visibleFaqs.map((faq) => (
             <details key={faq.q} className="border-b border-line py-3 last:border-0 print-block">
@@ -805,12 +805,15 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   };
 
   return (
-    <div className="min-h-screen pb-16">
+    /* One wrapper carries the whole theme. Tailwind utilities read the same
+       custom properties, so `bg-brand` inside here resolves to this property's
+       brand colour with no conditional class names anywhere. */
+    <div className="min-h-screen pb-16" style={themeVars(data.theme)}>
       <a className="skip-link" href="#contenido">
         Ir al contenido
       </a>
 
-      <header className="bg-brand-ink px-5 pb-5 pt-6 text-white">
+      <header className="px-5 pb-5 pt-6 text-white" style={ornamentStyle(data.theme)}>
         <div className="mx-auto max-w-2xl lg:max-w-6xl">
           {data.isOwner ? (
             <a
@@ -1091,6 +1094,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               <IconCheck size={14} /> {t.actions.offlineReady}
             </span>
           </div>
+          {reading ? (
           <Helpful
             slug={property.slug}
             section="guide"
@@ -1099,6 +1103,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             no={t.helpful.no}
             thanks={t.helpful.thanks}
           />
+          ) : null}
           {data.autoTranslated ? <p className="mt-3">{t.autoTranslated}</p> : null}
         </footer>
       </main>
@@ -1114,18 +1119,24 @@ function Section({
   children,
   slug,
   t,
+  ask,
 }: {
   id: string;
   title: string;
   children: React.ReactNode;
   slug?: string;
   t?: Dict;
+  /* Asking per section AND about the whole guide at once is two questions on
+     one screen, and the second one makes the first look like a survey. Section
+     mode asks about the section the guest just read; reading mode, where the
+     sections flow past uninterrupted, asks once at the end. */
+  ask?: boolean;
 }) {
   return (
     <section id={id} className="mt-8 scroll-mt-20">
       <h2 className="mb-3 font-display text-lg font-semibold">{title}</h2>
       <div className="space-y-3">{children}</div>
-      {slug && t ? (
+      {slug && t && ask ? (
         <Helpful
           slug={slug}
           section={id}

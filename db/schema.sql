@@ -39,6 +39,9 @@ create table if not exists properties (
   contacts       jsonb not null default '[]'::jsonb,
   -- sections the host switched off; hiding never deletes content
   hidden_sections jsonb not null default '[]'::jsonb,
+  -- palette, type pairing, corner radius and header ornament
+  theme          jsonb not null default
+                 '{"palette":"retorika","font":"moderna","radius":"suave","ornament":"ninguno"}'::jsonb,
   default_locale text not null default 'es' check (default_locale in ('es','en','fr','pt')),
   published      boolean not null default false,
   pin            text check (pin ~ '^[0-9]{4}$'),

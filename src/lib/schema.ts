@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_THEME, themeSchema } from "./theme";
 
 /* ---------------------------------------------------------------------------
    Single source of truth for the domain. The same schema validates the host's
@@ -80,6 +81,7 @@ export const propertySchema = z.object({
      A host who runs a flat with no rules should not have to erase them to stop
      showing them. */
   hiddenSections: z.array(z.string().max(24)).max(20).default([]),
+  theme: themeSchema.default(DEFAULT_THEME),
   defaultLocale: localeSchema,
   published: z.boolean(),
   pin: z.string().regex(/^\d{4}$/).nullable().or(z.literal("")).transform((v) => (v === "" ? null : v)),

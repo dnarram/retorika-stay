@@ -25,60 +25,31 @@ type Mode = "walking" | "driving" | "bicycling" | "transit";
 
 export default function RouteActions({
   to,
-  from,
   t,
   defaultMode = "walking",
 }: {
   to: { lat: number; lng: number };
-  /* The flat, when the journey starts there. Passing it means the route is
-     already drawn when the page opens instead of asking the guest where they
-     are — and it is what someone planning tomorrow's walk actually wants. It is
-     deliberately absent for "how do I reach the flat", where only the guest
-     knows where they are coming from. */
-  from?: { lat: number; lng: number };
   t: Dict;
   defaultMode?: Mode;
 }) {
-  const build = (origin?: { lat: number; lng: number }) => {
-    const url = new URL("https://www.google.com/maps/dir/");
-    url.searchParams.set("api", "1");
-    url.searchParams.set("destination", `${to.lat},${to.lng}`);
-    if (origin) url.searchParams.set("origin", `${origin.lat},${origin.lng}`);
-    /* A starting suggestion, not a decision: Maps keeps its own mode selector. */
-    url.searchParams.set("travelmode", defaultMode);
-    return url.toString();
-  };
+  const url = new URL("https://www.google.com/maps/dir/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("destination", `${to.lat},${to.lng}`);
+  /* No origin on purpose. Leaving it out is what makes Maps start from where
+     the guest actually is, which is right almost every time someone taps this.
+     The flat as a starting point was my idea, not theirs, and it cost a second
+     button to undo — a guest planning from the sofa can type the address into
+     the field Maps already shows them. */
+  url.searchParams.set("travelmode", defaultMode);
 
   return (
-    <>
-      <a
-        href={build(from)}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-sm font-medium text-white"
-      >
-        <IconMap size={14} /> {t.actions.directions}
-      </a>
-
-      {/* Two origins, one tap each, no screen in between.
-
-          The flat is the default because that is where the guest is when they
-          open this. But someone already out — halfway up the hill, deciding
-          where to have lunch — wants the route from where they stand, and
-          making them retype it inside Maps is exactly the friction this app
-          exists to remove. Omitting the origin entirely is what makes Maps use
-          the device's own location, so this is a second link rather than a
-          second feature. */}
-      {from ? (
-        <a
-          href={build(undefined)}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-muted ring-1 ring-line"
-        >
-          {t.actions.fromHere}
-        </a>
-      ) : null}
-    </>
+    <a
+      href={url.toString()}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-sm font-medium text-white"
+    >
+      <IconMap size={14} /> {t.actions.directions}
+    </a>
   );
 }

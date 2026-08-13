@@ -7,6 +7,7 @@ import { formatDistance, haversineMeters, walkingMinutes } from "@/lib/geo";
 import { getRepo } from "@/lib/repo";
 import type { Locale, Property, Stay } from "@/lib/schema";
 import { canRevealAccess, isPhase, nightsBetween, stayPhase, type StayPhase } from "@/lib/stay";
+import { fontsHref } from "@/lib/theme";
 import GuideView, { type GuestPayload } from "./GuideView";
 import PinGate from "./PinGate";
 
@@ -94,6 +95,7 @@ export default async function GuidePage(props: {
        guest must never learn there is a dashboard behind this page. */
     isOwner,
     hiddenSections: property.hiddenSections,
+    theme: property.theme,
     stay: stay
       ? {
           guestName: stay.guestName,
@@ -142,5 +144,12 @@ export default async function GuidePage(props: {
       .sort((a, b) => a.meters - b.meters),
   };
 
-  return <GuideView data={payload} />;
+  return (
+    <>
+      {/* React hoists this into <head>. Loading only the pairing this guide
+          actually uses keeps three unused families off a guest's phone. */}
+      <link rel="stylesheet" href={fontsHref(property.theme)} />
+      <GuideView data={payload} />
+    </>
+  );
 }

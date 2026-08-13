@@ -5,6 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { IconArrow, IconCheck, IconCross, IconInfo, IconQr, IconTrash } from "./editor-icons";
 import StepsEditor from "./StepsEditor";
+import ThemePanel from "./ThemePanel";
 import type { GuideRecord } from "@/data/seed";
 import { LOCALE_NAMES, getDictionary } from "@/i18n/dictionaries";
 import type { Check } from "@/lib/completeness";
@@ -202,6 +203,8 @@ export default function Editor({
                 contacts: nextProperty.contacts,
                 published: nextProperty.published,
                 pin: nextProperty.pin,
+                hiddenSections: nextProperty.hiddenSections,
+                theme: nextProperty.theme,
               }),
             }),
           ];
@@ -1440,6 +1443,13 @@ export default function Editor({
               ))}
             </ul>
           </div>
+          <ThemePanel
+            theme={property.theme}
+            propertyName={property.name}
+            city={property.city}
+            onChange={(patch) => patchProperty({ theme: { ...property.theme, ...patch } })}
+          />
+
           <Link
             href={`/g/${property.slug}`}
             className="block rounded-card border border-line bg-white p-4 text-sm font-medium text-brand-deep hover:border-brand"

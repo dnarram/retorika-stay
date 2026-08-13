@@ -4,6 +4,7 @@ import { z } from "zod";
 import { currentHostId } from "@/lib/auth";
 import { getRepo } from "@/lib/repo";
 import type { Guide, Property } from "@/lib/schema";
+import { DEFAULT_THEME } from "@/lib/theme";
 
 const bodySchema = z.object({
   name: z.string().min(2).max(80),
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
     checkoutUntil: "11:00",
     contacts: [{ kind: "emergency", phone: "112" }],
     hiddenSections: [],
+    theme: DEFAULT_THEME,
     defaultLocale: "es",
     published: false,
     pin: null,
