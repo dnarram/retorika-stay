@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { resolveLocale } from "@/i18n/dictionaries";
 import { currentHostId, guidePinCookie, verifyPinToken } from "@/lib/auth";
-import { directionsUrl, formatDistance, haversineMeters, walkingMinutes } from "@/lib/geo";
+import { formatDistance, haversineMeters, walkingMinutes } from "@/lib/geo";
 import { getRepo } from "@/lib/repo";
 import type { Locale, Property, Stay } from "@/lib/schema";
 import { canRevealAccess, isPhase, nightsBetween, stayPhase, type StayPhase } from "@/lib/stay";
@@ -119,7 +119,6 @@ export default async function GuidePage(props: {
          not serialised: not hidden, simply absent from the HTML. */
       accessCode: reveal ? (stay?.accessCodeOverride ?? property.accessCode) : null,
       wifiPassword: reveal ? property.wifiPassword : null,
-      directions: directionsUrl({ lat: property.lat, lng: property.lng, mode: "driving" }),
     },
     guide: guide.content,
     /* If the language served is not the host's own, it is a machine
@@ -137,7 +136,6 @@ export default async function GuidePage(props: {
           walkMin: walkingMinutes(origin, place),
           distance: formatDistance(meters),
           meters: Math.round(meters),
-          directions: directionsUrl({ lat: place.lat, lng: place.lng, mode: "walking" }),
         };
       })
       .sort((a, b) => a.meters - b.meters),

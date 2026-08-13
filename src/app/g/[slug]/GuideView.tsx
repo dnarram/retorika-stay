@@ -28,7 +28,6 @@ import {
 import { LOCALE_NAMES, getDictionary } from "@/i18n/dictionaries";
 import type { ContactKind, Guide, Locale, Place, PlaceCategory } from "@/lib/schema";
 import type { StayPhase } from "@/lib/stay";
-import { directionsUrl } from "@/lib/geo";
 import { wifiQrPayload } from "@/lib/wifi";
 import Keepsake from "./Keepsake";
 import RouteActions from "./RouteActions";
@@ -42,7 +41,6 @@ export type GuestPlace = Place & {
   walkMin: number;
   distance: string;
   meters: number;
-  directions: string;
 };
 
 export type GuestPayload = {
@@ -68,7 +66,6 @@ export type GuestPayload = {
     checkoutUntil: string;
     contacts: { kind: ContactKind; phone: string; detail?: string }[];
     accessCode: string | null;
-    directions: string;
   };
   guide: Guide;
   locale: Locale;
