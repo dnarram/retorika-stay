@@ -102,11 +102,17 @@ create table if not exists places (
   price       smallint check (price between 1 and 3),
   url         text,
   phone       text,
+  -- a hospital is a place, but not a recommendation: each section has its map
+  scope       text not null default 'recommendation'
+                check (scope in ('recommendation','emergency')),
+  -- opening hours in OpenStreetMap notation, stored and shown raw
+  hours       text,
   -- { "es": {"tagline": "...", "note": "..."}, "en": {...} }
   notes       jsonb not null default '{}'::jsonb,
   sort_order  smallint not null default 0
 );
 
 create index if not exists places_property_idx on places(property_id, category);
+create index if not exists places_scope_idx on places(property_id, scope);
 
 commit;

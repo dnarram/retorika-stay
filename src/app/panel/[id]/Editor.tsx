@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { IconArrow, IconCheck, IconCross, IconInfo, IconQr, IconTrash } from "./editor-icons";
+import StepsEditor from "./StepsEditor";
 import type { GuideRecord } from "@/data/seed";
 import { LOCALE_NAMES, getDictionary } from "@/i18n/dictionaries";
 import type { Check } from "@/lib/completeness";
@@ -31,6 +32,39 @@ const MapPicker = dynamic(() => import("@/components/MapPicker"), {
 /* The five transport entries almost every guide needs. Offered as one-tap
    titles rather than pre-created rows: a guide that ships with five empty
    sections the host has to delete is worse than one they fill themselves. */
+/* Turns the assistant's answer back into a list, tolerating the numbering it
+   sometimes adds despite being asked not to. */
+const linesFrom = (text: string | null): string[] =>
+  (text ?? "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*\d+[.)]\s*/, "").trim())
+    .filter(Boolean);
+
+/* The questions hosts answer over and over on WhatsApp. Offered as one-tap
+   starters: the host taps, the question is written, and they only supply the
+   answer — which is the part only they know. */
+const FAQ_TEMPLATES: { q: string }[] = [
+  { q: "¿Se puede beber el agua del grifo?" },
+  { q: "¿Hay ascensor?" },
+  { q: "¿Puedo dejar las maletas antes de entrar o después de salir?" },
+  { q: "¿Dónde compro a última hora?" },
+  { q: "¿Hay wifi suficiente para teletrabajar?" },
+  { q: "¿Se admiten mascotas?" },
+  { q: "¿Puedo fumar?" },
+  { q: "¿Dónde aparco?" },
+  { q: "¿Qué hago si se va la luz?" },
+  { q: "¿A qué hora recogen la basura?" },
+  { q: "¿Hay toallas y sábanas?" },
+  { q: "¿Se puede hacer check-in tarde?" },
+];
+
+const CHECKOUT_TEMPLATES = [
+  "Deja las llaves donde acordamos",
+  "Saca la basura",
+  "Cierra ventanas y apaga el aire",
+  "Los platos, en el lavavajillas",
+] as const;
+
 const HOUSE_TEMPLATES = [
   "Agua caliente",
   "Climatización",
@@ -81,10 +115,13 @@ export default function Editor({
   const [places, setPlaces] = useState(initialPlaces);
   const [stays, setStays] = useState(initialStays);
   const [assist, setAssist] = useState<string | null>(null);
+  const [assistTarget, setAssistTarget] = useState<"arrival" | "checkout" | null>(null);
   const [country, setCountry] = useState<string | undefined>(undefined);
   const [nearby, setNearby] = useState<NearbyPlace[] | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<string | null>(null);
   const [nearbyFailed, setNearbyFailed] = useState(false);
+  const [erNearby, setErNearby] = useState<NearbyPlace[] | null>(null);
+  const [erStatus, setErStatus] = useState<string | null>(null);
   const [locale, setLocale] = useState<Locale>(initialProperty.defaultLocale);
   const [step, setStep] = useState(1);
   const [saveState, setSave] = useState<SaveState>("idle");
@@ -295,7 +332,26 @@ export default function Editor({
     setNearbyStatus(fresh.length === 0 ? "No encontramos sitios nuevos cerca." : null);
   }
 
-  async function addNearby(candidate: NearbyPlace) {
+  async function loadEmergencyNearby() {
+    setErStatus("Buscando servicios cerca…");
+    const response = await fetch(
+      `/api/nearby?scope=emergency&lat=${property.lat}&lng=${property.lng}`,
+    );
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; detail?: string }
+        | null;
+      setErStatus([payload?.error, payload?.detail].filter(Boolean).join(" — "));
+      return;
+    }
+    const { places: found } = (await response.json()) as { places: NearbyPlace[] };
+    const already = new Set(places.map((p) => p.name.toLowerCase()));
+    const fresh = found.filter((p) => !already.has(p.name.toLowerCase()));
+    setErNearby(fresh);
+    setErStatus(fresh.length === 0 ? "No encontramos servicios nuevos cerca." : null);
+  }
+
+  async function addNearby(candidate: NearbyPlace, scope: "recommendation" | "emergency" = "recommendation") {
     setNearby((current) => current?.filter((p) => p.name !== candidate.name) ?? null);
     const response = await fetch("/api/places", {
       method: "POST",
@@ -307,9 +363,13 @@ export default function Editor({
           name: candidate.name,
           lat: candidate.lat,
           lng: candidate.lng,
+          scope,
           price: null,
-          url: null,
-          phone: null,
+          /* Whatever OpenStreetMap already knows travels with the place: one
+             less field for the host to fill, and they can still correct it. */
+          url: candidate.website ?? null,
+          phone: candidate.phone ?? null,
+          hours: candidate.hours ?? null,
           notes: { [locale]: { tagline: "", note: "" } },
         },
       }),
@@ -331,9 +391,11 @@ export default function Editor({
           name: "Sitio nuevo",
           lat: property.lat,
           lng: property.lng,
+          scope: "recommendation",
           price: null,
           url: null,
           phone: null,
+          hours: null,
           notes: { [locale]: { tagline: "", note: "" } },
         },
       }),
@@ -353,7 +415,12 @@ export default function Editor({
   /* The assistant REORGANISES what the host wrote; it never adds facts. The
      suggestion is shown for them to accept or discard, and is never saved on
      its own. */
-  async function suggest(task: "pasos" | "normas" | "nota" | "pulir", input: string) {
+  async function suggest(
+    task: "pasos" | "normas" | "nota" | "pulir",
+    input: string,
+    target: "arrival" | "checkout" | null = null,
+  ) {
+    setAssistTarget(target);
     setAssist("Pensando…");
     const response = await fetch("/api/assist", {
       method: "POST",
@@ -556,51 +623,24 @@ export default function Editor({
                   onChange={(v) => patchProperty({ accessCode: v })}
                   hint="Solo se envía al navegador del huésped durante su estancia."
                 />
-                <ListEditor
+                <StepsEditor
                   label="Pasos para entrar"
                   items={guide?.content.arrivalSteps ?? []}
                   onChange={(arrivalSteps) => patchGuide({ arrivalSteps })}
                   placeholder="Ej.: la caja de llaves es la gris, a la izquierda del portal."
+                  onAssist={() =>
+                    suggest("pasos", (guide?.content.arrivalSteps ?? []).join("\n"), "arrival")
+                  }
+                  assistLabel="Ordenar mis notas con el asistente"
+                  assistHint="Reescribe lo que ya has puesto. No inventa datos: si falta algo, lo deja entre corchetes para que lo completes tú."
+                  assistResult={assistTarget === "arrival" ? assist : null}
+                  onAcceptAssist={() => {
+                    patchGuide({ arrivalSteps: linesFrom(assist) });
+                    setAssist(null);
+                  }}
+                  onDismissAssist={() => setAssist(null)}
                 />
-                <div className="rounded-xl bg-brand-soft p-3">
-                  <button
-                    type="button"
-                    onClick={() => suggest("pasos", (guide?.content.arrivalSteps ?? []).join("\n"))}
-                    className="rounded-full bg-white px-4 py-2 text-sm font-medium text-brand-deep ring-1 ring-brand-line"
-                  >
-                    Ordenar mis notas con el asistente
-                  </button>
-                  <p className="mt-2 text-xs text-brand-ink">
-                    Reescribe lo que ya has puesto. No inventa datos: si falta algo, lo deja entre
-                    corchetes para que lo completes tú.
-                  </p>
-                  {assist ? (
-                    <div className="mt-3 rounded-lg bg-white p-3 text-sm">
-                      <pre className="whitespace-pre-wrap font-sans">{assist}</pre>
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            patchGuide({
-                              arrivalSteps: assist.split("\n").map((l) => l.replace(/^\d+[.)]\s*/, "")).filter(Boolean),
-                            });
-                            setAssist(null);
-                          }}
-                          className="rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white"
-                        >
-                          Usar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAssist(null)}
-                          className="rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-line"
-                        >
-                          Descartar
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
+
                 <Area label="Aparcamiento" value={guide?.content.parking ?? ""} onChange={(v) => patchGuide({ parking: v })} />
               </Panel>
               <Panel title="WiFi">
@@ -752,7 +792,7 @@ export default function Editor({
                 ) : null}
               </div>
               <ul className="mt-4 space-y-4">
-                {places.map((place) => (
+                {places.filter((place) => place.scope !== "emergency").map((place) => (
                   <li key={place.id} className="rounded-xl border border-line p-4">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field label="Nombre" value={place.name} onChange={(v) => savePlace({ ...place, name: v })} />
@@ -1032,17 +1072,94 @@ export default function Editor({
                   Añadir contacto
                 </button>
               </Panel>
+
+              <Panel title="Dónde acudir">
+                <p className="text-sm text-muted">
+                  Un teléfono resuelve una urgencia; una dirección resuelve la otra mitad. Los
+                  lugares que añadas aquí salen en su propio mapa dentro de «Emergencias», separado
+                  del de recomendaciones.
+                </p>
+                <button
+                  type="button"
+                  onClick={loadEmergencyNearby}
+                  className="mt-3 rounded-full bg-white px-4 py-2 text-sm font-medium text-brand-deep ring-1 ring-brand-line"
+                >
+                  Buscar hospitales, farmacias y policía cerca
+                </button>
+                {erStatus ? <p className="mt-2 text-xs text-muted">{erStatus}</p> : null}
+                {erNearby && erNearby.length > 0 ? (
+                  <ul className="mt-3 max-h-60 space-y-1 overflow-auto">
+                    {erNearby.map((candidate) => (
+                      <li
+                        key={`${candidate.name}-${candidate.lat}`}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-canvas px-3 py-2 text-sm"
+                      >
+                        <span className="min-w-0">
+                          <span className="font-medium">{candidate.name}</span>
+                          <span className="block text-xs text-muted">
+                            {candidate.walkMin} min a pie
+                            {candidate.hours ? ` · ${candidate.hours}` : ""}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setErNearby((c) => c?.filter((p) => p.name !== candidate.name) ?? null);
+                            void addNearby(candidate, "emergency");
+                          }}
+                          className="shrink-0 rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white"
+                        >
+                          Añadir
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                <ul className="mt-3 space-y-2">
+                  {places
+                    .filter((place) => place.scope === "emergency")
+                    .map((place) => (
+                      <li
+                        key={place.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-sm"
+                      >
+                        <span className="font-medium">{place.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removePlace(place.id)}
+                          aria-label="Quitar"
+                          className="text-muted hover:text-alert-ink"
+                        >
+                          <IconTrash size={16} />
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </Panel>
             </>
           ) : null}
 
           {step === 7 ? (
             <>
               <Panel title="Salida">
-                <ListEditor
+                <StepsEditor
                   label="Pasos de salida"
                   items={guide?.content.checkoutSteps ?? []}
                   onChange={(checkoutSteps) => patchGuide({ checkoutSteps })}
                   placeholder="Ej.: deja las llaves dentro de la caja y gira la rueda."
+                  suggestions={CHECKOUT_TEMPLATES}
+                  onAssist={() =>
+                    suggest("pasos", (guide?.content.checkoutSteps ?? []).join("\n"), "checkout")
+                  }
+                  assistLabel="Ordenar mis notas con el asistente"
+                  assistHint="Los mismos pasos, en el orden en que ocurren y con frases más cortas."
+                  assistResult={assistTarget === "checkout" ? assist : null}
+                  onAcceptAssist={() => {
+                    patchGuide({ checkoutSteps: linesFrom(assist) });
+                    setAssist(null);
+                  }}
+                  onDismissAssist={() => setAssist(null)}
                 />
               </Panel>
 
@@ -1056,7 +1173,7 @@ export default function Editor({
                     <li key={index} className="rounded-xl border border-line p-3">
                       <input
                         value={faq.q}
-                        placeholder="¿Se puede beber el agua del grifo?"
+                        placeholder="Escribe la pregunta"
                         onChange={(event) => {
                           const faqs = [...(guide?.content.faqs ?? [])];
                           faqs[index] = { ...faq, q: event.target.value };
@@ -1087,13 +1204,33 @@ export default function Editor({
                     </li>
                   ))}
                 </ul>
-                <button
-                  type="button"
-                  onClick={() => patchGuide({ faqs: [...(guide?.content.faqs ?? []), { q: "", a: "" }] })}
-                  className="mt-3 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
-                >
-                  Añadir pregunta
-                </button>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => patchGuide({ faqs: [...(guide?.content.faqs ?? []), { q: "", a: "" }] })}
+                    className="rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
+                  >
+                    Añadir pregunta
+                  </button>
+                  {FAQ_TEMPLATES.filter(
+                    (template) => !(guide?.content.faqs ?? []).some((faq) => faq.q === template.q),
+                  )
+                    .slice(0, 8)
+                    .map((template) => (
+                      <button
+                        key={template.q}
+                        type="button"
+                        onClick={() =>
+                          patchGuide({
+                            faqs: [...(guide?.content.faqs ?? []), { q: template.q, a: "" }],
+                          })
+                        }
+                        className="rounded-full px-3 py-2 text-xs font-medium text-brand-deep ring-1 ring-brand-line"
+                      >
+                        + {template.q}
+                      </button>
+                    ))}
+                </div>
               </Panel>
 
               <Panel title="Reservas">

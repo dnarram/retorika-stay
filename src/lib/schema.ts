@@ -137,6 +137,14 @@ export const placeNoteSchema = z.object({
   note: z.string().max(400),
 });
 
+/* A place is either somewhere the host recommends or somewhere the guest hopes
+   never to need. Mixing a hospital into the restaurant map is jarring in both
+   directions, so the scope travels with the place and each section draws its
+   own map. */
+export const PLACE_SCOPES = ["recommendation", "emergency"] as const;
+export const placeScopeSchema = z.enum(PLACE_SCOPES);
+export type PlaceScope = (typeof PLACE_SCOPES)[number];
+
 export const placeSchema = z.object({
   id: z.string(),
   propertyId: z.string(),
@@ -144,9 +152,14 @@ export const placeSchema = z.object({
   name: z.string().max(80),
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
+  scope: placeScopeSchema.default("recommendation"),
   price: z.number().int().min(1).max(3).nullable(),
   url: z.string().url().nullable(),
   phone: z.string().max(32).nullable(),
+  /* Opening hours as OpenStreetMap writes them ("Mo-Sa 09:00-21:30"). Stored
+     raw and shown raw: parsing them into a weekly table is a rabbit hole with
+     public holidays at the bottom, and the string is already readable. */
+  hours: z.string().max(120).nullable().default(null),
   /* The host's personal note is what makes this a guide rather than a map: it
      is stored per language and is the most translated field in the app. */
   notes: z.record(localeSchema, placeNoteSchema),

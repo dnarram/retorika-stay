@@ -67,6 +67,18 @@ const TAGS: { key: string; value: string; category: PlaceCategory }[] = [
   { key: "leisure", value: "garden", category: "outdoors" },
 ];
 
+/* The places a guest hopes never to need. Kept in a separate list because they
+   are a separate map and a separate question: nobody browses hospitals. */
+const EMERGENCY_TAGS: { key: string; value: string; category: PlaceCategory }[] = [
+  { key: "amenity", value: "hospital", category: "services" },
+  { key: "amenity", value: "clinic", category: "services" },
+  { key: "amenity", value: "doctors", category: "services" },
+  { key: "amenity", value: "pharmacy", category: "services" },
+  { key: "amenity", value: "police", category: "services" },
+  { key: "amenity", value: "fire_station", category: "services" },
+  { key: "amenity", value: "veterinary", category: "services" },
+];
+
 export type NearbyPlace = {
   name: string;
   lat: number;
@@ -74,6 +86,15 @@ export type NearbyPlace = {
   category: PlaceCategory;
   walkMin: number;
   cuisine?: string;
+  /* OpenStreetMap already carries these tags on many venues, and Overpass
+     returns them in the same response we were making anyway. That is the whole
+     of the "extra information" this app can honestly offer for free: opening
+     hours, a website, a phone. Coverage is partial and the host can always
+     correct it — but a field filled in automatically is a field they did not
+     have to type. */
+  website?: string;
+  phone?: string;
+  hours?: string;
 };
 
 type Element = {
@@ -90,7 +111,14 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const lat = Number(params.get("lat"));
   const lng = Number(params.get("lng"));
-  const radius = Math.min(Math.max(Number(params.get("radius") ?? 700), 200), 2000);
+  const scope = params.get("scope") === "emergency" ? "emergency" : "recommendation";
+  const tags = scope === "emergency" ? EMERGENCY_TAGS : TAGS;
+  /* Emergency services are worth walking further for, and there may be none
+     within 700 m of a village. */
+  const radius = Math.min(
+    Math.max(Number(params.get("radius") ?? (scope === "emergency" ? 2500 : 700)), 200),
+    5000,
+  );
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
     return NextResponse.json(
@@ -110,7 +138,7 @@ export async function GET(request: Request) {
      nwr = node, way and relation: plenty of restaurants and museums are mapped
      as buildings rather than points. `out center` gives each one a coordinate. */
   const byKey = new Map<string, string[]>();
-  for (const tag of TAGS) {
+  for (const tag of tags) {
     byKey.set(tag.key, [...(byKey.get(tag.key) ?? []), tag.value]);
   }
   const clauses = [...byKey.entries()]
@@ -151,9 +179,10 @@ export async function GET(request: Request) {
       const seen = new Set<string>();
       const places: NearbyPlace[] = [];
 
+      const tagList = tags;
       for (const element of payload.elements ?? []) {
-        const tags = element.tags ?? {};
-        const name = tags.name;
+        const elementTags = element.tags ?? {};
+        const name = elementTags.name;
         const plat = element.lat ?? element.center?.lat;
         const plng = element.lon ?? element.center?.lon;
         if (!name || plat === undefined || plng === undefined) continue;
@@ -161,7 +190,7 @@ export async function GET(request: Request) {
         const key = name.toLowerCase();
         if (seen.has(key)) continue;
 
-        const match = TAGS.find((t) => tags[t.key] === t.value);
+        const match = tagList.find((t) => elementTags[t.key] === t.value);
         if (!match) continue;
 
         seen.add(key);
@@ -171,7 +200,10 @@ export async function GET(request: Request) {
           lng: plng,
           category: match.category,
           walkMin: walkingMinutes(origin, { lat: plat, lng: plng }),
-          cuisine: tags.cuisine?.split(";")[0]?.replace(/_/g, " "),
+          cuisine: elementTags.cuisine?.split(";")[0]?.replace(/_/g, " "),
+          website: elementTags.website ?? elementTags["contact:website"],
+          phone: elementTags.phone ?? elementTags["contact:phone"],
+          hours: elementTags.opening_hours,
         });
       }
 

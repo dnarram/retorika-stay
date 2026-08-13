@@ -44,9 +44,11 @@ await sql.begin(async (tx) => {
   }
 
   for (const [index, place] of PLACES.entries()) {
-    await tx`insert into places (id, property_id, category, name, lat, lng, price, url, phone, notes, sort_order)
+    await tx`insert into places (id, property_id, category, name, lat, lng, price, url, phone,
+              scope, hours, notes, sort_order)
              values (${place.id}, ${place.propertyId}, ${place.category}, ${place.name}, ${place.lat},
-              ${place.lng}, ${place.price}, ${place.url}, ${place.phone}, ${tx.json(place.notes)}, ${index})
+              ${place.lng}, ${place.price}, ${place.url}, ${place.phone}, ${place.scope},
+              ${place.hours}, ${tx.json(place.notes)}, ${index})
              on conflict (id) do nothing`;
   }
 });

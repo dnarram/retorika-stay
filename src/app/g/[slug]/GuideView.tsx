@@ -31,6 +31,7 @@ import type { StayPhase } from "@/lib/stay";
 import { directionsUrl } from "@/lib/geo";
 import { wifiQrPayload } from "@/lib/wifi";
 import Keepsake from "./Keepsake";
+import RouteActions from "./RouteActions";
 
 const PlacesMap = dynamic(() => import("./PlacesMap"), {
   ssr: false,
@@ -187,6 +188,15 @@ export default function GuideView({ data }: { data: GuestPayload }) {
      both, and asking the guest to "configure" anything is a lost guest. So:
      two chips, no explanation needed, the choice remembered on the device. */
   const [reading, setReading] = useState(false);
+  const recommendations = useMemo(
+    () => places.filter((place) => place.scope !== "emergency"),
+    [places],
+  );
+  const emergencyPlaces = useMemo(
+    () => places.filter((place) => place.scope === "emergency"),
+    [places],
+  );
+
   /* A section with nothing in it is not an empty section: it is a section that
      should not exist yet. Showing "Normas" with no rules under it makes the
      guide look unfinished and makes the guest doubt the rest of it.
@@ -202,15 +212,18 @@ export default function GuideView({ data }: { data: GuestPayload }) {
          section does not keep. */
       house: guide.house.some((item) => item.body.trim()),
       rules: guide.rules.some((rule) => rule.text.trim()),
-      places: places.length > 0,
+      places: recommendations.length > 0,
       transport: guide.transport.some(
         (item) => item.body.trim() || item.lat !== undefined,
       ),
-      emergency: property.contacts.length > 0 || Boolean(guide.emergencyNote.trim()),
+      emergency:
+        property.contacts.length > 0 ||
+        Boolean(guide.emergencyNote.trim()) ||
+        emergencyPlaces.length > 0,
       checkout: guide.checkoutSteps.some((step) => step.trim()),
       faq: guide.faqs.some((faq) => faq.q.trim()),
     }),
-    [property, guide, places],
+    [property, guide, recommendations, emergencyPlaces],
   );
 
   const order = useMemo(
@@ -314,14 +327,14 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   needleRef.current = needle;
   const visiblePlaces = useMemo(
     () =>
-      places.filter((place) => {
+      recommendations.filter((place) => {
         const inCategory = category === "todas" || place.category === category;
         if (!needle) return inCategory;
         const note = place.notes[data.locale];
         const haystack = `${place.name} ${note?.tagline ?? ""} ${note?.note ?? ""}`.toLowerCase();
         return inCategory && haystack.includes(needle);
       }),
-    [places, category, needle, data.locale],
+    [recommendations, category, needle, data.locale],
   );
 
   const visibleFaqs = useMemo(
@@ -345,8 +358,8 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   );
 
   const categories = useMemo(
-    () => Array.from(new Set(places.map((p) => p.category))),
-    [places],
+    () => Array.from(new Set(recommendations.map((p) => p.category))),
+    [recommendations],
   );
 
   const wifiQr = `/api/qr?size=320&data=${encodeURIComponent(
@@ -362,14 +375,13 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       <Section id="arrival" title={t.sections.arrival} key="arrival">
         <Card>
           <Row icon={<IconPin size={18} />} label={t.labels.address} value={property.address} />
-          <a
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white no-print"
-            href={property.directions}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {t.actions.navigate} <IconArrow size={16} />
-          </a>
+          <div className="mt-3 flex flex-wrap gap-2 no-print">
+            <RouteActions
+              to={{ lat: property.lat, lng: property.lng }}
+              t={t}
+              defaultMode="driving"
+            />
+          </div>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <Row icon={<IconClock size={18} />} label={t.labels.checkin} value={property.checkinFrom} compact />
             <Row icon={<IconClock size={18} />} label={t.labels.checkout} value={property.checkoutUntil} compact />
@@ -578,15 +590,14 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                   <p className="mt-2 text-sm font-medium text-brand-deep">{note.tagline}</p>
                 ) : null}
                 {note?.note ? <p className="mt-1 text-sm text-muted">{note.note}</p> : null}
+                {place.hours ? (
+                  <p className="mt-1 flex items-start gap-1.5 text-xs text-muted">
+                    <IconClock size={13} className="mt-0.5 shrink-0" />
+                    {t.hours}: {place.hours}
+                  </p>
+                ) : null}
                 <div className="mt-3 flex flex-wrap gap-2 text-sm no-print">
-                  <a
-                    href={place.directions}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3 py-1.5 font-medium text-white"
-                  >
-                    <IconWalk size={14} /> {t.actions.navigate} · {place.distance}
-                  </a>
+                  <RouteActions to={{ lat: place.lat, lng: place.lng }} t={t} />
                   {place.phone ? (
                     <a
                       href={`tel:${place.phone}`}
@@ -626,7 +637,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           })}
           {visiblePlaces.length === 0 ? (
             <li className="rounded-card border border-dashed border-line p-6 text-center text-sm text-muted">
-              {places.length === 0 ? t.emptyPlaces : t.noResults}
+              {recommendations.length === 0 ? t.emptyPlaces : t.noResults}
             </li>
           ) : null}
         </ul>
@@ -643,14 +654,9 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               <p className="font-medium">{item.title}</p>
               <p className="mt-1 text-sm text-muted">{item.body}</p>
               {item.lat !== undefined && item.lng !== undefined ? (
-                <a
-                  href={directionsUrl({ lat: item.lat, lng: item.lng, mode: "driving" })}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="no-print mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ring-1 ring-brand-line"
-                >
-                  <IconMap size={14} /> {t.actions.navigate}
-                </a>
+                <div className="no-print mt-2 flex flex-wrap gap-2">
+                  <RouteActions to={{ lat: item.lat, lng: item.lng }} t={t} defaultMode="driving" />
+                </div>
               ) : null}
             </div>
           ))}
@@ -688,6 +694,59 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           </ul>
           {guide.emergencyNote ? <p className="mt-3 text-sm text-muted">{guide.emergencyNote}</p> : null}
         </Card>
+
+        {/* Its own map, deliberately. A hospital pinned between two tapas bars
+            reads as a bad joke, and someone opening this section is not
+            browsing. */}
+        {emergencyPlaces.length > 0 ? (
+          <Card>
+            <h3 className="font-display text-base font-semibold">{t.emergencyPlaces}</h3>
+            <div className="no-print mt-3 h-56 overflow-hidden rounded-xl border border-line">
+              <PlacesMap
+                center={{ lat: property.lat, lng: property.lng }}
+                propertyName={property.name}
+                places={emergencyPlaces}
+              />
+            </div>
+            <ul className="mt-3 space-y-3">
+              {emergencyPlaces.map((place) => {
+                const note = place.notes[data.locale] ?? place.notes.es;
+                return (
+                  <li key={place.id} className="rounded-xl border border-line p-3 print-block">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-medium">{place.name}</p>
+                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand-ink">
+                        <IconWalk size={13} />
+                        {place.walkMin} {t.labels.walk}
+                      </span>
+                    </div>
+                    {note?.note ? <p className="mt-1 text-sm text-muted">{note.note}</p> : null}
+                    {place.hours ? (
+                      <p className="mt-1 text-xs text-muted">
+                        {t.hours}: {place.hours}
+                      </p>
+                    ) : null}
+                    <div className="mt-2 flex flex-wrap gap-2 no-print">
+                      <RouteActions
+                        to={{ lat: place.lat, lng: place.lng }}
+                        t={t}
+                        defaultMode="driving"
+                      />
+                      {place.phone ? (
+                        <a
+                          href={`tel:${place.phone}`}
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ring-1 ring-brand-line"
+                        >
+                          <IconPhone size={14} /> {t.actions.call}
+                        </a>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        ) : null}
       </Section>
     ),
 

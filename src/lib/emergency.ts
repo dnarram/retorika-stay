@@ -17,6 +17,12 @@ import type { ContactKind } from "./schema";
    These are suggestions the host ticks, never data published on their behalf:
    an emergency number shown on a guide is a promise, and the person making the
    promise should be the one who chose it.
+
+   Note on the `kind` values: they are deliberately GENERIC — "police", not
+   "local police". Spain has three police forces with three numbers, and filing
+   the Guardia Civil under a label that reads "local police" is simply wrong.
+   Which force it is belongs in the detail line, where it is a fact rather than
+   a miscategorisation.
 --------------------------------------------------------------------------- */
 
 export type Suggestion = { kind: ContactKind; phone: string; detail: string };

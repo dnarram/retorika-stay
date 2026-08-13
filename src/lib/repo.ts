@@ -413,6 +413,8 @@ const pgRepo: Repo = {
         price: number | null;
         url: string | null;
         phone: string | null;
+        scope: Place["scope"];
+        hours: string | null;
         notes: Place["notes"];
       }[]
     >`select * from places where property_id = ${propertyId} order by sort_order, name`;
@@ -426,18 +428,22 @@ const pgRepo: Repo = {
       price: row.price,
       url: row.url,
       phone: row.phone,
+      scope: row.scope ?? "recommendation",
+      hours: row.hours,
       notes: row.notes,
     }));
   },
   async savePlace(place) {
     const sql = getSql();
     await sql`
-      insert into places (id, property_id, category, name, lat, lng, price, url, phone, notes)
+      insert into places (id, property_id, category, name, lat, lng, price, url, phone, scope, hours, notes)
       values (${place.id}, ${place.propertyId}, ${place.category}, ${place.name}, ${place.lat},
-              ${place.lng}, ${place.price}, ${place.url}, ${place.phone}, ${sql.json(place.notes as never)})
+              ${place.lng}, ${place.price}, ${place.url}, ${place.phone}, ${place.scope},
+              ${place.hours}, ${sql.json(place.notes as never)})
       on conflict (id) do update set
         category = excluded.category, name = excluded.name, lat = excluded.lat, lng = excluded.lng,
-        price = excluded.price, url = excluded.url, phone = excluded.phone, notes = excluded.notes`;
+        price = excluded.price, url = excluded.url, phone = excluded.phone,
+        scope = excluded.scope, hours = excluded.hours, notes = excluded.notes`;
   },
   async deletePlace(id) {
     const sql = getSql();
