@@ -178,6 +178,7 @@ type PropertyRow = {
   checkout_until: string;
   access_code_updated_at: string | null;
   contacts: Property["contacts"];
+  hidden_sections: string[];
   default_locale: Locale;
   published: boolean;
   pin: string | null;
@@ -202,6 +203,7 @@ const toProperty = (row: PropertyRow): Property => ({
   checkoutUntil: String(row.checkout_until).slice(0, 5),
   accessCodeUpdatedAt: toISOStamp(row.access_code_updated_at),
   contacts: row.contacts ?? [],
+  hiddenSections: row.hidden_sections ?? [],
   defaultLocale: row.default_locale,
   published: row.published,
   pin: row.pin,
@@ -225,6 +227,7 @@ const COLUMN: Record<string, string> = {
   checkoutUntil: "checkout_until",
   accessCodeUpdatedAt: "access_code_updated_at",
   contacts: "contacts",
+  hiddenSections: "hidden_sections",
   defaultLocale: "default_locale",
   published: "published",
   pin: "pin",
@@ -290,7 +293,10 @@ const pgRepo: Repo = {
     if (entries.length === 0) return this.getProperty(id);
     const assignments = entries.map(([key, value]) => {
       const column = COLUMN[key];
-      const payload = column === "contacts" ? sql.json(value as never) : (value as never);
+      const payload =
+        column === "contacts" || column === "hidden_sections"
+          ? sql.json(value as never)
+          : (value as never);
       return sql`${sql(column)} = ${payload}`;
     });
     const merged = assignments.reduce((acc, fragment, index) =>
@@ -304,13 +310,14 @@ const pgRepo: Repo = {
     await sql`
       insert into properties (id, host_id, slug, name, city, address, lat, lng, host_name,
         host_phone, wifi_ssid, wifi_password, wifi_security, access_code, checkin_from,
-        checkout_until, contacts, default_locale, published, pin)
+        checkout_until, contacts, hidden_sections, default_locale, published, pin)
       values (${property.id}, ${property.hostId}, ${property.slug}, ${property.name},
         ${property.city}, ${property.address}, ${property.lat}, ${property.lng},
         ${property.hostName}, ${property.hostPhone}, ${property.wifiSsid},
         ${property.wifiPassword}, ${property.wifiSecurity}, ${property.accessCode},
         ${property.checkinFrom}, ${property.checkoutUntil}, ${sql.json(property.contacts as never)},
-        ${property.defaultLocale}, ${property.published}, ${property.pin})`;
+        ${sql.json(property.hiddenSections as never)}, ${property.defaultLocale},
+        ${property.published}, ${property.pin})`;
     return property;
   },
   async deleteProperty(id) {

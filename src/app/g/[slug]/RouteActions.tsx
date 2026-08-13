@@ -39,21 +39,46 @@ export default function RouteActions({
   t: Dict;
   defaultMode?: Mode;
 }) {
-  const url = new URL("https://www.google.com/maps/dir/");
-  url.searchParams.set("api", "1");
-  url.searchParams.set("destination", `${to.lat},${to.lng}`);
-  if (from) url.searchParams.set("origin", `${from.lat},${from.lng}`);
-  /* A starting suggestion, not a decision: Maps keeps its own mode selector. */
-  url.searchParams.set("travelmode", defaultMode);
+  const build = (origin?: { lat: number; lng: number }) => {
+    const url = new URL("https://www.google.com/maps/dir/");
+    url.searchParams.set("api", "1");
+    url.searchParams.set("destination", `${to.lat},${to.lng}`);
+    if (origin) url.searchParams.set("origin", `${origin.lat},${origin.lng}`);
+    /* A starting suggestion, not a decision: Maps keeps its own mode selector. */
+    url.searchParams.set("travelmode", defaultMode);
+    return url.toString();
+  };
 
   return (
-    <a
-      href={url.toString()}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-sm font-medium text-white"
-    >
-      <IconMap size={14} /> {t.actions.directions}
-    </a>
+    <>
+      <a
+        href={build(from)}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-sm font-medium text-white"
+      >
+        <IconMap size={14} /> {t.actions.directions}
+      </a>
+
+      {/* Two origins, one tap each, no screen in between.
+
+          The flat is the default because that is where the guest is when they
+          open this. But someone already out — halfway up the hill, deciding
+          where to have lunch — wants the route from where they stand, and
+          making them retype it inside Maps is exactly the friction this app
+          exists to remove. Omitting the origin entirely is what makes Maps use
+          the device's own location, so this is a second link rather than a
+          second feature. */}
+      {from ? (
+        <a
+          href={build(undefined)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-muted ring-1 ring-line"
+        >
+          {t.actions.fromHere}
+        </a>
+      ) : null}
+    </>
   );
 }

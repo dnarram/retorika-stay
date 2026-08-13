@@ -93,6 +93,7 @@ export default async function GuidePage(props: {
     /* Drives the "back to my properties" link. Only the owner ever sees it: a
        guest must never learn there is a dashboard behind this page. */
     isOwner,
+    hiddenSections: property.hiddenSections,
     stay: stay
       ? {
           guestName: stay.guestName,

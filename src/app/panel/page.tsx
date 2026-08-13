@@ -50,6 +50,9 @@ export default async function PanelPage() {
           languages: metrics
             .filter((m) => m.kind === "language")
             .map((m) => ({ value: m.value, count: m.count })),
+          helpful: metrics
+            .filter((m) => m.kind === "helpful")
+            .map((m) => ({ value: m.value, count: m.count })),
           devices: metrics
             .filter((m) => m.kind === "device")
             .map((m) => ({ value: m.value, count: m.count })),

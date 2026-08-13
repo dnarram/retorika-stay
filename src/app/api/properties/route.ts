@@ -67,6 +67,7 @@ export async function POST(request: Request) {
     checkinFrom: "15:00",
     checkoutUntil: "11:00",
     contacts: [{ kind: "emergency", phone: "112" }],
+    hiddenSections: [],
     defaultLocale: "es",
     published: false,
     pin: null,

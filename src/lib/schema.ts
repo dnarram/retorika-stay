@@ -75,6 +75,11 @@ export const propertySchema = z.object({
   checkinFrom: z.string().regex(/^\d{2}:\d{2}$/),
   checkoutUntil: z.string().regex(/^\d{2}:\d{2}$/),
   contacts: z.array(contactSchema).max(12),
+  /* Sections the host has switched off. Hiding is not deleting: the content
+     stays exactly where it was and comes back the moment the switch is flipped.
+     A host who runs a flat with no rules should not have to erase them to stop
+     showing them. */
+  hiddenSections: z.array(z.string().max(24)).max(20).default([]),
   defaultLocale: localeSchema,
   published: z.boolean(),
   pin: z.string().regex(/^\d{4}$/).nullable().or(z.literal("")).transform((v) => (v === "" ? null : v)),
@@ -201,7 +206,7 @@ export const stayInputSchema = staySchema.omit({ id: true, propertyId: true, slu
 
 /* Metrics aggregated per property and day. Never per guest or per device: with
    no identifiers there is no personal data to protect. */
-export const METRIC_KINDS = ["open", "language", "section", "search_miss", "call", "device"] as const;
+export const METRIC_KINDS = ["open", "language", "section", "search_miss", "call", "device", "helpful"] as const;
 export const metricKindSchema = z.enum(METRIC_KINDS);
 export type MetricKind = (typeof METRIC_KINDS)[number];
 

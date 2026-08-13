@@ -14,7 +14,6 @@ import { completeness } from "@/lib/completeness";
 import {
   CONTACT_KINDS,
   LOCALES,
-  type Stay,
   PLACE_CATEGORIES,
   type Guide,
   type Locale,
@@ -58,6 +57,21 @@ const FAQ_TEMPLATES: { q: string }[] = [
   { q: "¿Se puede hacer check-in tarde?" },
 ];
 
+/* The sections a host can switch off, in the order the guide tells its story.
+   "Cómo llegar" is not here on purpose: a guide without an address is not a
+   guide, and the guest always needs it. */
+const GUIDE_SECTIONS = [
+  { id: "entry" },
+  { id: "wifi" },
+  { id: "house" },
+  { id: "rules" },
+  { id: "places" },
+  { id: "transport" },
+  { id: "emergency" },
+  { id: "checkout" },
+  { id: "faq" },
+] as const;
+
 const CHECKOUT_TEMPLATES = [
   "Deja las llaves donde acordamos",
   "Saca la basura",
@@ -98,14 +112,12 @@ export default function Editor({
   property: initialProperty,
   guides: initialGuides,
   places: initialPlaces,
-  stays: initialStays,
   checks,
   mode,
 }: {
   property: Property;
   guides: GuideRecord[];
   places: Place[];
-  stays: Stay[];
   initialScore: number;
   checks: Check[];
   mode: "postgres" | "demo";
@@ -113,7 +125,6 @@ export default function Editor({
   const [property, setProperty] = useState(initialProperty);
   const [guides, setGuides] = useState(initialGuides);
   const [places, setPlaces] = useState(initialPlaces);
-  const [stays, setStays] = useState(initialStays);
   const [assist, setAssist] = useState<string | null>(null);
   const [assistTarget, setAssistTarget] = useState<"arrival" | "checkout" | null>(null);
   const [country, setCountry] = useState<string | undefined>(undefined);
@@ -431,57 +442,8 @@ export default function Editor({
     setAssist(payload.suggestion ?? payload.error ?? "No se pudo generar la sugerencia.");
   }
 
-  async function saveStay(stay: Stay) {
-    setStays((current) => current.map((s) => (s.id === stay.id ? stay : s)));
-    await fetch("/api/stays", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        propertyId: property.id,
-        id: stay.id,
-        revoked: stay.revoked,
-        stay: {
-          guestName: stay.guestName,
-          arrival: stay.arrival,
-          departure: stay.departure,
-          accessCodeOverride: stay.accessCodeOverride,
-          pin: stay.pin,
-        },
-      }),
-    });
-  }
 
-  async function addStay() {
-    const today = new Date();
-    const iso = (days: number) => {
-      const date = new Date(today);
-      date.setDate(date.getDate() + days);
-      return date.toISOString().slice(0, 10);
-    };
-    const response = await fetch("/api/stays", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        propertyId: property.id,
-        stay: {
-          guestName: "",
-          arrival: iso(0),
-          departure: iso(3),
-          accessCodeOverride: null,
-          pin: null,
-        },
-      }),
-    });
-    if (response.ok) {
-      const { stay } = (await response.json()) as { stay: Stay };
-      setStays((current) => [stay, ...current]);
-    }
-  }
 
-  async function removeStay(id: string) {
-    setStays((current) => current.filter((s) => s.id !== id));
-    await fetch(`/api/stays/${id}`, { method: "DELETE" });
-  }
 
 
   const guideUrl =
@@ -492,7 +454,7 @@ export default function Editor({
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link href="/panel" className="text-sm text-muted hover:text-brand-deep">
-            ← Tus alojamientos
+            ← Mis alojamientos
           </Link>
           <h1 className="mt-1 font-display text-2xl font-semibold">{property.name}</h1>
           <p className="text-sm text-muted">
@@ -1116,23 +1078,63 @@ export default function Editor({
                   </ul>
                 ) : null}
 
-                <ul className="mt-3 space-y-2">
+                <ul className="mt-3 space-y-3">
                   {places
                     .filter((place) => place.scope === "emergency")
                     .map((place) => (
-                      <li
-                        key={place.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-sm"
-                      >
-                        <span className="font-medium">{place.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => removePlace(place.id)}
-                          aria-label="Quitar"
-                          className="text-muted hover:text-alert-ink"
-                        >
-                          <IconTrash size={16} />
-                        </button>
+                      <li key={place.id} className="rounded-xl border border-line p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <Field
+                            label="Nombre"
+                            value={place.name}
+                            onChange={(v) => savePlace({ ...place, name: v })}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removePlace(place.id)}
+                            aria-label="Quitar"
+                            className="mt-5 shrink-0 text-muted hover:text-alert-ink"
+                          >
+                            <IconTrash size={16} />
+                          </button>
+                        </div>
+                        <Field
+                          label="Teléfono"
+                          value={place.phone ?? ""}
+                          onChange={(v) => savePlace({ ...place, phone: v || null })}
+                        />
+                        <Area
+                          label={`Nota para el huésped (${locale})`}
+                          value={place.notes[locale]?.note ?? ""}
+                          onChange={(v) =>
+                            savePlace({
+                              ...place,
+                              notes: {
+                                ...place.notes,
+                                [locale]: { tagline: place.notes[locale]?.tagline ?? "", note: v },
+                              },
+                            })
+                          }
+                        />
+                        {/* OpenStreetMap is community data and can be out of date:
+                            the host has to be able to see where we placed a
+                            hospital and move it. An emergency address that is
+                            wrong is worse than one that is missing. */}
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-sm font-medium text-brand-deep">
+                            Verificar la ubicación en el mapa
+                          </summary>
+                          <div className="mt-2">
+                            <MapPicker
+                              lat={place.lat}
+                              lng={place.lng}
+                              seedQuery={place.name}
+                              near={{ lat: property.lat, lng: property.lng }}
+                              label={`Dónde está ${place.name}`}
+                              onPick={(pick) => savePlace({ ...place, lat: pick.lat, lng: pick.lng })}
+                            />
+                          </div>
+                        </details>
                       </li>
                     ))}
                 </ul>
@@ -1233,84 +1235,108 @@ export default function Editor({
                 </div>
               </Panel>
 
-              <Panel title="Reservas">
+              <Panel title="Preguntas frecuentes">
                 <p className="text-sm text-muted">
-                  Cada reserva genera su propio enlace. Cuando termina, el código de entrada y la
-                  clave del WiFi dejan de mostrarse en esa guía sin que tengas que hacer nada. El
-                  enlace de muestra del alojamiento nunca los enseña.
+                  Escribe la pregunta que ya te han hecho tres veces por WhatsApp. Cada una que
+                  respondas aquí es un mensaje menos a medianoche.
                 </p>
                 <ul className="mt-3 space-y-3">
-                  {stays.map((stay) => (
-                    <li key={stay.id} className="rounded-xl border border-line p-3">
-                      <div className="grid gap-2 sm:grid-cols-[1fr_140px_140px]">
-                        <Field
-                          label="Huésped"
-                          value={stay.guestName ?? ""}
-                          onChange={(v) => saveStay({ ...stay, guestName: v })}
-                        />
-                        <label className="block text-sm">
-                          <span className="font-medium">Llegada</span>
-                          <input
-                            type="date"
-                            value={stay.arrival}
-                            onChange={(event) => saveStay({ ...stay, arrival: event.target.value })}
-                            className="mt-1 w-full rounded-xl border border-line px-3 py-2 outline-none focus:border-brand"
-                          />
-                        </label>
-                        <label className="block text-sm">
-                          <span className="font-medium">Salida</span>
-                          <input
-                            type="date"
-                            value={stay.departure}
-                            onChange={(event) => saveStay({ ...stay, departure: event.target.value })}
-                            className="mt-1 w-full rounded-xl border border-line px-3 py-2 outline-none focus:border-brand"
-                          />
-                        </label>
-                      </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                        <a
-                          href={`/g/${stay.slug}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono text-xs text-brand-deep underline"
-                        >
-                          /g/{stay.slug}
-                        </a>
-                        <a
-                          href={`/api/qr?size=600&data=${encodeURIComponent(`/g/${stay.slug}`)}`}
-                          download={`qr-${stay.slug}.svg`}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-line"
-                        >
-                          <IconQr size={14} /> QR de esta reserva
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => saveStay({ ...stay, revoked: !stay.revoked })}
-                          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                            stay.revoked ? "bg-alert-soft text-alert-ink" : "ring-1 ring-line"
-                          }`}
-                        >
-                          {stay.revoked ? "Revocada" : "Revocar acceso"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeStay(stay.id)}
-                          aria-label="Eliminar reserva"
-                          className="ml-auto text-muted hover:text-alert-ink"
-                        >
-                          <IconTrash size={16} />
-                        </button>
-                      </div>
+                  {(guide?.content.faqs ?? []).map((faq, index) => (
+                    <li key={index} className="rounded-xl border border-line p-3">
+                      <input
+                        value={faq.q}
+                        placeholder="Escribe la pregunta"
+                        onChange={(event) => {
+                          const faqs = [...(guide?.content.faqs ?? [])];
+                          faqs[index] = { ...faq, q: event.target.value };
+                          patchGuide({ faqs });
+                        }}
+                        className="w-full rounded-lg border border-line px-3 py-2 font-medium outline-none focus:border-brand"
+                      />
+                      <textarea
+                        value={faq.a}
+                        rows={2}
+                        placeholder="Respuesta"
+                        onChange={(event) => {
+                          const faqs = [...(guide?.content.faqs ?? [])];
+                          faqs[index] = { ...faq, a: event.target.value };
+                          patchGuide({ faqs });
+                        }}
+                        className="mt-2 w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          patchGuide({ faqs: (guide?.content.faqs ?? []).filter((_, i) => i !== index) })
+                        }
+                        className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted hover:text-alert-ink"
+                      >
+                        <IconTrash size={16} /> Eliminar
+                      </button>
                     </li>
                   ))}
                 </ul>
-                <button
-                  type="button"
-                  onClick={addStay}
-                  className="mt-3 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white"
-                >
-                  Añadir reserva
-                </button>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => patchGuide({ faqs: [...(guide?.content.faqs ?? []), { q: "", a: "" }] })}
+                    className="rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
+                  >
+                    Añadir pregunta
+                  </button>
+                  {FAQ_TEMPLATES.filter(
+                    (template) => !(guide?.content.faqs ?? []).some((faq) => faq.q === template.q),
+                  )
+                    .slice(0, 8)
+                    .map((template) => (
+                      <button
+                        key={template.q}
+                        type="button"
+                        onClick={() =>
+                          patchGuide({
+                            faqs: [...(guide?.content.faqs ?? []), { q: template.q, a: "" }],
+                          })
+                        }
+                        className="rounded-full px-3 py-2 text-xs font-medium text-brand-deep ring-1 ring-brand-line"
+                      >
+                        + {template.q}
+                      </button>
+                    ))}
+                </div>
+              </Panel>
+
+              <Panel title="Qué se muestra en la guía">
+                <p className="text-sm text-muted">
+                  Desmarca lo que no quieras enseñar. Apagar una sección no borra nada: el contenido
+                  sigue aquí y vuelve a aparecer en cuanto la enciendas. Las secciones sin contenido
+                  no salen aunque estén encendidas.
+                </p>
+                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {GUIDE_SECTIONS.map((section) => {
+                    const hidden = property.hiddenSections.includes(section.id);
+                    return (
+                      <li key={section.id}>
+                        <label className="flex items-center gap-3 rounded-xl border border-line px-3 py-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={!hidden}
+                            onChange={() =>
+                              patchProperty({
+                                hiddenSections: hidden
+                                  ? property.hiddenSections.filter((id) => id !== section.id)
+                                  : [...property.hiddenSections, section.id],
+                              })
+                            }
+                            className="h-5 w-5 accent-[var(--color-brand)]"
+                          />
+                          <span className={hidden ? "text-muted line-through" : ""}>
+                            {t.sections[section.id]}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
               </Panel>
 
               <Panel title="Publicación">

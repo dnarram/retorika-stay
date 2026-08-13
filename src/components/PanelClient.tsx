@@ -29,6 +29,7 @@ export type PropertyRow = {
     opens: number;
     languages: { value: string; count: number }[];
     devices: { value: string; count: number }[];
+    helpful: { value: string; count: number }[];
     misses: { value: string; count: number }[];
   };
 };
@@ -118,20 +119,83 @@ export default function PanelClient({
     router.refresh();
   }
 
-  /* The phone's own share sheet: WhatsApp, SMS, mail, whatever the host uses.
-     No backend, no email provider. Desktop browsers without the API fall back
-     to copying the link, which is what the user wanted anyway. */
-  async function shareLink(row: PropertyRow) {
-    const url = `${window.location.origin}/g/${row.slug}`;
+  /* Bookings are managed where the property lives, not inside the guide editor:
+     the editor is about what the guide says, this page is about who is staying.
+     Every action a booking needs is here — create, edit dates, share, revoke,
+     delete — so there is one place to look and nothing to learn. */
+  async function addStay(row: PropertyRow) {
+    const iso = (days: number) => {
+      const date = new Date();
+      date.setDate(date.getDate() + days);
+      return date.toISOString().slice(0, 10);
+    };
+    setBusy(true);
+    await fetch("/api/stays", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        propertyId: row.id,
+        stay: {
+          guestName: "",
+          arrival: iso(0),
+          departure: iso(3),
+          accessCodeOverride: null,
+          pin: null,
+        },
+      }),
+    });
+    setBusy(false);
+    router.refresh();
+  }
+
+  async function saveStay(
+    row: PropertyRow,
+    stay: PropertyRow["stays"][number],
+    patch: Partial<{ guestName: string; arrival: string; departure: string; revoked: boolean }>,
+  ) {
+    const next = { ...stay, ...patch };
+    const response = await fetch("/api/stays", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        propertyId: row.id,
+        id: stay.id,
+        revoked: next.revoked,
+        stay: {
+          guestName: next.guestName,
+          arrival: next.arrival,
+          departure: next.departure,
+          accessCodeOverride: null,
+          pin: null,
+        },
+      }),
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(payload?.error ?? "No se pudo guardar la reserva.");
+      return;
+    }
+    router.refresh();
+  }
+
+  async function removeStay(id: string, guestName: string | null) {
+    if (!confirm(`¿Borrar la reserva${guestName ? ` de ${guestName}` : ""}? No se puede deshacer.`))
+      return;
+    await fetch(`/api/stays/${id}`, { method: "DELETE" });
+    router.refresh();
+  }
+
+  async function shareSlug(slug: string, title: string) {
+    const url = `${window.location.origin}/g/${slug}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: row.name, text: `Guía de ${row.name}`, url });
+        await navigator.share({ title, url });
         return;
       } catch {
         /* the user cancelled: not an error */
       }
     }
-    await copyLink(row.slug);
+    await copyLink(slug);
   }
 
   async function copyLink(slug: string) {
@@ -254,32 +318,60 @@ export default function PanelClient({
                   Lo siguiente: <span className="text-ink">{row.nextStep.label}.</span>{" "}
                   {row.nextStep.hint}
                 </p>
-              ) : (
-                <p className="mt-2 text-sm text-ok-ink">La guía está completa.</p>
-              )}
+              ) : null}
             </div>
 
             <div className="mt-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Reservas</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Reservas</p>
+                <button
+                  type="button"
+                  onClick={() => addStay(row)}
+                  className="rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white"
+                >
+                  Nueva reserva
+                </button>
+              </div>
               {row.stays.length === 0 ? (
                 <p className="mt-2 text-sm text-muted">
-                  Sin reservas. Crea una desde el editor para generar el enlace del huésped.
+                  Sin reservas. Crea una y tendrás el enlace y el QR de ese huésped, con acceso solo
+                  durante sus fechas.
                 </p>
               ) : (
                 <ul className="mt-2 space-y-2">
-                  {row.stays.slice(0, 3).map((stay) => (
-                    <li
-                      key={stay.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line px-3 py-2 text-sm"
-                    >
-                      <span>
-                        <span className="font-medium">{stay.guestName ?? "Huésped"}</span>
-                        <span className="text-muted">
-                          {" "}
-                          · {stay.arrival} → {stay.departure}
-                        </span>
-                      </span>
-                      <span className="flex items-center gap-2">
+                  {row.stays.map((stay) => (
+                    <li key={stay.id} className="rounded-xl border border-line p-3 text-sm">
+                      <div className="grid gap-2 sm:grid-cols-[1fr_130px_130px]">
+                        <label className="block">
+                          <span className="text-xs text-muted">Huésped</span>
+                          <input
+                            defaultValue={stay.guestName ?? ""}
+                            placeholder="Nombre"
+                            onBlur={(event) => saveStay(row, stay, { guestName: event.target.value })}
+                            className="mt-0.5 w-full rounded-lg border border-line px-2.5 py-1.5 outline-none focus:border-brand"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs text-muted">Llegada</span>
+                          <input
+                            type="date"
+                            defaultValue={stay.arrival}
+                            onChange={(event) => saveStay(row, stay, { arrival: event.target.value })}
+                            className="mt-0.5 w-full rounded-lg border border-line px-2.5 py-1.5 outline-none focus:border-brand"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs text-muted">Salida</span>
+                          <input
+                            type="date"
+                            defaultValue={stay.departure}
+                            onChange={(event) => saveStay(row, stay, { departure: event.target.value })}
+                            className="mt-0.5 w-full rounded-lg border border-line px-2.5 py-1.5 outline-none focus:border-brand"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                             stay.revoked
@@ -291,15 +383,56 @@ export default function PanelClient({
                         >
                           {stay.revoked ? "Revocada" : PHASE_LABEL[stay.phase]}
                         </span>
-                        {row.published ? (
-                          <Link
-                            href={`/g/${stay.slug}`}
-                            className="text-xs font-medium text-brand-deep underline"
-                          >
-                            abrir
-                          </Link>
-                        ) : null}
-                      </span>
+
+                        {/* Every action a booking needs, on the booking itself.
+                            They used to live inside the guide editor, which is
+                            about what the guide says — not about who is staying
+                            this weekend. */}
+                        <Link
+                          href={`/g/${stay.slug}`}
+                          className="rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-line"
+                        >
+                          Abrir
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => copyLink(stay.slug)}
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-line"
+                        >
+                          {copied === stay.slug ? <IconCheck size={13} /> : <IconCopy size={13} />}
+                          {copied === stay.slug ? "Copiado" : "Copiar enlace"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => shareSlug(stay.slug, `${row.name} · ${stay.guestName ?? "Tu estancia"}`)}
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-line"
+                        >
+                          <IconShare size={13} /> Compartir
+                        </button>
+                        <a
+                          href={`/api/qr?size=600&data=${encodeURIComponent(`/g/${stay.slug}`)}`}
+                          download={`qr-${stay.slug}.svg`}
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-line"
+                        >
+                          <IconQr size={13} /> QR
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => saveStay(row, stay, { revoked: !stay.revoked })}
+                          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                            stay.revoked ? "bg-alert-soft text-alert-ink" : "ring-1 ring-line"
+                          }`}
+                        >
+                          {stay.revoked ? "Restablecer acceso" : "Revocar acceso"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeStay(stay.id, stay.guestName)}
+                          className="ml-auto text-xs text-muted hover:text-alert-ink"
+                        >
+                          Borrar
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -323,6 +456,19 @@ export default function PanelClient({
                   <p className="mt-1 text-muted">
                     Dispositivo aproximado:{" "}
                     {row.metrics.devices.map((d) => `${d.value} ${d.count}`).join(" · ")}
+                  </p>
+                ) : null}
+                {row.metrics.helpful.length > 0 ? (
+                  <p className="mt-1 text-muted">
+                    ¿Les sirvió?{" "}
+                    <span className="text-ink">
+                      {row.metrics.helpful.filter((h) => h.value.endsWith(":si")).reduce((n, h) => n + h.count, 0)} sí
+                    </span>{" "}
+                    ·{" "}
+                    {row.metrics.helpful
+                      .filter((h) => h.value.endsWith(":no"))
+                      .map((h) => `${h.value.split(":")[0]} (${h.count})`)
+                      .join(", ") || "ningún no"}
                   </p>
                 ) : null}
                 {row.metrics.misses.length > 0 ? (
@@ -367,7 +513,7 @@ export default function PanelClient({
                   </button>
                   <button
                     type="button"
-                    onClick={() => shareLink(row)}
+                    onClick={() => shareSlug(row.slug, row.name)}
                     className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium ring-1 ring-line"
                   >
                     <IconShare size={16} /> Compartir

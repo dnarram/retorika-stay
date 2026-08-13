@@ -37,6 +37,8 @@ create table if not exists properties (
   checkout_until time not null default '11:00',
   access_code_updated_at timestamptz,
   contacts       jsonb not null default '[]'::jsonb,
+  -- sections the host switched off; hiding never deletes content
+  hidden_sections jsonb not null default '[]'::jsonb,
   default_locale text not null default 'es' check (default_locale in ('es','en','fr','pt')),
   published      boolean not null default false,
   pin            text check (pin ~ '^[0-9]{4}$'),
@@ -75,7 +77,7 @@ create table if not exists metrics (
   property_id text not null references properties(id) on delete cascade,
   day         date not null default current_date,
   kind        text not null check (kind in
-                ('open','language','section','search_miss','call','device')),
+                ('open','language','section','search_miss','call','device','helpful')),
   value       text not null default '',
   count       integer not null default 0,
   primary key (property_id, day, kind, value)

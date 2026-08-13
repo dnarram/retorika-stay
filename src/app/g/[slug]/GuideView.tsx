@@ -25,10 +25,11 @@ import {
   IconWalk,
   IconWifi,
 } from "@/components/icons";
-import { LOCALE_NAMES, getDictionary } from "@/i18n/dictionaries";
+import { LOCALE_NAMES, getDictionary, type Dict } from "@/i18n/dictionaries";
 import type { ContactKind, Guide, Locale, Place, PlaceCategory } from "@/lib/schema";
 import type { StayPhase } from "@/lib/stay";
 import { wifiQrPayload } from "@/lib/wifi";
+import Helpful from "./Helpful";
 import Keepsake from "./Keepsake";
 import RouteActions from "./RouteActions";
 
@@ -48,6 +49,7 @@ export type GuestPayload = {
   /* Only ever true for the host looking at their own unpublished guide. */
   draft: boolean;
   isOwner: boolean;
+  hiddenSections: string[];
   stay: { guestName: string | null; arrival: string; departure: string; nights: number } | null;
   autoTranslated: boolean;
   property: {
@@ -224,8 +226,11 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   );
 
   const order = useMemo(
-    () => sectionOrder(data.phase).filter((id) => filled[id]),
-    [data.phase, filled],
+    () =>
+      sectionOrder(data.phase).filter(
+        (id) => filled[id] && !data.hiddenSections.includes(id),
+      ),
+    [data.phase, filled, data.hiddenSections],
   );
 
   /* Service worker registration: the guide is cached on the phone on first
@@ -369,7 +374,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
 
   const sections: Record<SectionId, React.ReactNode> = {
     arrival: (
-      <Section id="arrival" title={t.sections.arrival} key="arrival">
+      <Section id="arrival" title={t.sections.arrival} key="arrival" slug={property.slug} t={t}>
         <Card>
           <Row icon={<IconPin size={18} />} label={t.labels.address} value={property.address} />
           <div className="mt-3 flex flex-wrap gap-2 no-print">
@@ -394,7 +399,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     entry: (
-      <Section id="entry" title={t.sections.entry} key="entry">
+      <Section id="entry" title={t.sections.entry} key="entry" slug={property.slug} t={t}>
         <Card>
           <ol className="space-y-2 text-sm">
             {guide.arrivalSteps.map((step, index) => (
@@ -445,7 +450,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     wifi: (
-      <Section id="wifi" title={t.sections.wifi} key="wifi">
+      <Section id="wifi" title={t.sections.wifi} key="wifi" slug={property.slug} t={t}>
         <Card>
           <dl className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
@@ -495,7 +500,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     house: (
-      <Section id="house" title={t.sections.house} key="house">
+      <Section id="house" title={t.sections.house} key="house" slug={property.slug} t={t}>
         <Card>
           {guide.house
             .filter((item) => item.body.trim())
@@ -515,7 +520,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     rules: (
-      <Section id="rules" title={t.sections.rules} key="rules">
+      <Section id="rules" title={t.sections.rules} key="rules" slug={property.slug} t={t}>
         <Card>
           <ul className="space-y-3">
             {guide.rules
@@ -545,7 +550,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     places: (
-      <Section id="places" title={t.sections.places} key="places">
+      <Section id="places" title={t.sections.places} key="places" slug={property.slug} t={t}>
         <div className="no-print -mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
           <Chip active={category === "todas"} onClick={() => setCategory("todas")}>
             {t.actions.seeAll}
@@ -646,7 +651,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     transport: (
-      <Section id="transport" title={t.sections.transport} key="transport">
+      <Section id="transport" title={t.sections.transport} key="transport" slug={property.slug} t={t}>
         <Card>
           {guide.transport
             .filter((item) => item.body.trim() || item.lat !== undefined)
@@ -671,7 +676,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     emergency: (
-      <Section id="emergency" title={t.sections.emergency} key="emergency">
+      <Section id="emergency" title={t.sections.emergency} key="emergency" slug={property.slug} t={t}>
         <Card>
           <p className="flex gap-2 rounded-xl bg-alert-soft p-3 text-sm text-alert-ink">
             <IconAlert size={18} />
@@ -758,7 +763,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     checkout: (
-      <Section id="checkout" title={t.sections.checkout} key="checkout">
+      <Section id="checkout" title={t.sections.checkout} key="checkout" slug={property.slug} t={t}>
         <Card>
           <p className="text-sm text-muted">
             {t.labels.checkout} <span className="font-medium text-ink">{property.checkoutUntil}</span>
@@ -785,7 +790,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     faq: (
-      <Section id="faq" title={t.sections.faq} key="faq">
+      <Section id="faq" title={t.sections.faq} key="faq" slug={property.slug} t={t}>
         <Card>
           {visibleFaqs.map((faq) => (
             <details key={faq.q} className="border-b border-line py-3 last:border-0 print-block">
@@ -1086,6 +1091,14 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               <IconCheck size={14} /> {t.actions.offlineReady}
             </span>
           </div>
+          <Helpful
+            slug={property.slug}
+            section="guide"
+            question={t.helpfulGuide}
+            yes={t.helpful.yes}
+            no={t.helpful.no}
+            thanks={t.helpful.thanks}
+          />
           {data.autoTranslated ? <p className="mt-3">{t.autoTranslated}</p> : null}
         </footer>
       </main>
@@ -1095,11 +1108,33 @@ export default function GuideView({ data }: { data: GuestPayload }) {
 
 /* --------------------------------- pieces --------------------------------- */
 
-function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+function Section({
+  id,
+  title,
+  children,
+  slug,
+  t,
+}: {
+  id: string;
+  title: string;
+  children: React.ReactNode;
+  slug?: string;
+  t?: Dict;
+}) {
   return (
     <section id={id} className="mt-8 scroll-mt-20">
       <h2 className="mb-3 font-display text-lg font-semibold">{title}</h2>
       <div className="space-y-3">{children}</div>
+      {slug && t ? (
+        <Helpful
+          slug={slug}
+          section={id}
+          question={t.helpful.q}
+          yes={t.helpful.yes}
+          no={t.helpful.no}
+          thanks={t.helpful.thanks}
+        />
+      ) : null}
     </section>
   );
 }
