@@ -597,7 +597,11 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                   </p>
                 ) : null}
                 <div className="mt-3 flex flex-wrap gap-2 text-sm no-print">
-                  <RouteActions to={{ lat: place.lat, lng: place.lng }} t={t} />
+                  <RouteActions
+                    to={{ lat: place.lat, lng: place.lng }}
+                    from={{ lat: property.lat, lng: property.lng }}
+                    t={t}
+                  />
                   {place.phone ? (
                     <a
                       href={`tel:${place.phone}`}
@@ -655,7 +659,12 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               <p className="mt-1 text-sm text-muted">{item.body}</p>
               {item.lat !== undefined && item.lng !== undefined ? (
                 <div className="no-print mt-2 flex flex-wrap gap-2">
-                  <RouteActions to={{ lat: item.lat, lng: item.lng }} t={t} defaultMode="driving" />
+                  <RouteActions
+                    to={{ lat: item.lat, lng: item.lng }}
+                    from={{ lat: property.lat, lng: property.lng }}
+                    t={t}
+                    defaultMode="driving"
+                  />
                 </div>
               ) : null}
             </div>
@@ -729,6 +738,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                     <div className="mt-2 flex flex-wrap gap-2 no-print">
                       <RouteActions
                         to={{ lat: place.lat, lng: place.lng }}
+                        from={{ lat: property.lat, lng: property.lng }}
                         t={t}
                         defaultMode="driving"
                       />

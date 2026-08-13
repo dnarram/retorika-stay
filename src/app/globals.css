@@ -138,19 +138,27 @@ h3,
   }
 }
 
+/* A whole section travels together.
+
+   The first attempt relied on `break-after: avoid` for the heading, which
+   browsers honour inconsistently inside multi-column layouts — and when they
+   did not, a heading sat alone at the foot of one column with its content
+   starting the next. That is worse than any amount of white space: the guest
+   reads a title and finds nothing under it.
+
+   So the unit that cannot be split is the section itself, not the heading. The
+   cost is that a very long section may leave one column shorter; the benefit is
+   that a title is never orphaned from what it announces. */
+.guide-flow section,
 .guide-flow > * {
-  /* sections themselves may break; their cards may not */
-  break-inside: auto;
-}
-
-.guide-flow h2 {
-  break-after: avoid;
-}
-
-.guide-flow .print-block,
-.guide-flow li,
-.guide-flow figure {
   break-inside: avoid;
+  page-break-inside: avoid; /* older engines, still needed for print */
+}
+
+.guide-flow h2,
+.guide-flow h3 {
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .guide-flow section {
