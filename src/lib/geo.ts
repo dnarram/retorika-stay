@@ -44,8 +44,26 @@ export function formatDistance(meters: number): string {
 }
 
 /* Universal maps link: works on iOS, Android and desktop without depending on a
-   specific app or on a paid API. */
-export function directionsUrl(to: { lat: number; lng: number; name?: string }): string {
-  const q = `${to.lat},${to.lng}`;
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
+   specific app or on a paid API.
+
+   `dir_action=navigate` is the difference between showing a route and starting
+   turn-by-turn navigation: on a phone it hands straight over to the maps app in
+   driving or walking mode. On a desktop browser it degrades to the usual route
+   view, so there is nothing to detect and nothing to break.
+
+   Deliberately not deep-linking to Apple Maps or Waze by sniffing the user
+   agent: guessing wrong strands a guest in a foreign city with a link that
+   opens nothing, and every phone can already open a Google Maps URL. */
+export function directionsUrl(to: {
+  lat: number;
+  lng: number;
+  mode?: "walking" | "driving" | "transit";
+  navigate?: boolean;
+}): string {
+  const url = new URL("https://www.google.com/maps/dir/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("destination", `${to.lat},${to.lng}`);
+  url.searchParams.set("travelmode", to.mode ?? "walking");
+  if (to.navigate !== false) url.searchParams.set("dir_action", "navigate");
+  return url.toString();
 }

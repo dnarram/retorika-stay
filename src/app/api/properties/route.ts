@@ -22,16 +22,16 @@ const BLANK: Guide = {
   arrivalSteps: [""],
   parking: "",
   wifiNote: "",
-  house: [
-    { title: "Agua caliente", body: "" },
-    { title: "Climatización", body: "" },
-    { title: "Basura y reciclaje", body: "" },
-  ],
+  /* No pre-made empty rows. A guide that arrives with three headings and no
+     text under them looks unfinished to the guest and gives the host three
+     things to delete. The editor offers the same titles as one-tap chips
+     instead, so the suggestion is there without the debris. */
+  house: [],
   rules: [
     { text: "Silencio de 23:00 a 8:00.", allowed: null },
     { text: "No se puede fumar dentro.", allowed: false },
   ],
-  transport: [{ title: "Desde el aeropuerto o la estación", body: "" }],
+  transport: [],
   emergencyNote: "",
   checkoutSteps: ["Deja las llaves en...", "Saca la basura al contenedor de..."],
   faqs: [],

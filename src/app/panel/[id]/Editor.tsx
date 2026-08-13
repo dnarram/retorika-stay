@@ -28,6 +28,26 @@ const MapPicker = dynamic(() => import("@/components/MapPicker"), {
   loading: () => <div className="h-64 animate-pulse rounded-xl bg-brand-soft" />,
 });
 
+/* The five transport entries almost every guide needs. Offered as one-tap
+   titles rather than pre-created rows: a guide that ships with five empty
+   sections the host has to delete is worse than one they fill themselves. */
+const HOUSE_TEMPLATES = [
+  "Agua caliente",
+  "Climatización",
+  "Lavadora",
+  "Basura y reciclaje",
+  "Cocina",
+  "Televisión",
+] as const;
+
+const TRANSPORT_TEMPLATES = [
+  "Desde el aeropuerto",
+  "Desde la estación de tren",
+  "Estación de autobuses",
+  "Parada de taxis",
+  "Alquiler de coche",
+] as const;
+
 const STEPS = [
   "Datos del alojamiento",
   "Entrada y WiFi",
@@ -35,7 +55,7 @@ const STEPS = [
   "Normas",
   "Recomendaciones",
   "Moverse y emergencias",
-  "Salida, reservas y publicación",
+  "Salida, preguntas y publicación",
 ] as const;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -817,13 +837,100 @@ export default function Editor({
           {step === 6 ? (
             <>
               <Panel title="Cómo moverse">
-                <PairEditor
-                  items={guide?.content.transport ?? []}
-                  onChange={(transport) => patchGuide({ transport })}
-                  titleLabel="Medio"
-                  bodyLabel="Detalle"
-                  hint="Incluye siempre la llegada desde el aeropuerto o la estación."
-                />
+                <p className="text-sm text-muted">
+                  Incluye siempre la llegada desde el aeropuerto o la estación. Si el apartado es un
+                  sitio —el aeropuerto, la estación, la parada de taxis— sitúalo en el mapa y tu
+                  huésped podrá navegar hasta allí de un toque.
+                </p>
+                <ul className="mt-3 space-y-3">
+                  {(guide?.content.transport ?? []).map((item, index) => {
+                    const update = (patch: Partial<typeof item>) => {
+                      const transport = [...(guide?.content.transport ?? [])];
+                      transport[index] = { ...item, ...patch };
+                      patchGuide({ transport });
+                    };
+                    return (
+                      <li key={index} className="rounded-xl border border-line p-3">
+                        <input
+                          value={item.title}
+                          placeholder="Desde el aeropuerto"
+                          onChange={(event) => update({ title: event.target.value })}
+                          className="w-full rounded-lg border border-line px-3 py-2 font-medium outline-none focus:border-brand"
+                        />
+                        <textarea
+                          value={item.body}
+                          rows={2}
+                          placeholder="Autobús directo, 50 minutos, 5 €."
+                          onChange={(event) => update({ body: event.target.value })}
+                          className="mt-2 w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand"
+                        />
+
+                        {TRANSPORT_TEMPLATES.length > 0 && !item.title ? (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {TRANSPORT_TEMPLATES.map((template) => (
+                              <button
+                                key={template}
+                                type="button"
+                                onClick={() => update({ title: template })}
+                                className="rounded-full px-2.5 py-1 text-xs font-medium text-brand-deep ring-1 ring-brand-line"
+                              >
+                                {template}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-sm font-medium text-brand-deep">
+                            {item.lat !== undefined
+                              ? "Ubicación marcada · ajustar"
+                              : "Marcar la ubicación en el mapa (opcional)"}
+                          </summary>
+                          <div className="mt-2">
+                            <MapPicker
+                              lat={item.lat ?? property.lat}
+                              lng={item.lng ?? property.lng}
+                              seedQuery={item.title}
+                              near={{ lat: property.lat, lng: property.lng }}
+                              label={item.title || "Ubicación"}
+                              onPick={(pick) => update({ lat: pick.lat, lng: pick.lng })}
+                            />
+                            {item.lat !== undefined ? (
+                              <button
+                                type="button"
+                                onClick={() => update({ lat: undefined, lng: undefined })}
+                                className="mt-2 text-xs text-muted hover:text-alert-ink"
+                              >
+                                Quitar la ubicación
+                              </button>
+                            ) : null}
+                          </div>
+                        </details>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            patchGuide({
+                              transport: (guide?.content.transport ?? []).filter((_, i) => i !== index),
+                            })
+                          }
+                          className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted hover:text-alert-ink"
+                        >
+                          <IconTrash size={16} /> Eliminar
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() =>
+                    patchGuide({ transport: [...(guide?.content.transport ?? []), { title: "", body: "" }] })
+                  }
+                  className="mt-3 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
+                >
+                  Añadir apartado
+                </button>
               </Panel>
               <Panel title="Emergencias">
                 <p className="text-sm text-muted">
@@ -937,6 +1044,56 @@ export default function Editor({
                   onChange={(checkoutSteps) => patchGuide({ checkoutSteps })}
                   placeholder="Ej.: deja las llaves dentro de la caja y gira la rueda."
                 />
+              </Panel>
+
+              <Panel title="Preguntas frecuentes">
+                <p className="text-sm text-muted">
+                  Escribe la pregunta que ya te han hecho tres veces por WhatsApp. Cada una que
+                  respondas aquí es un mensaje menos a medianoche.
+                </p>
+                <ul className="mt-3 space-y-3">
+                  {(guide?.content.faqs ?? []).map((faq, index) => (
+                    <li key={index} className="rounded-xl border border-line p-3">
+                      <input
+                        value={faq.q}
+                        placeholder="¿Se puede beber el agua del grifo?"
+                        onChange={(event) => {
+                          const faqs = [...(guide?.content.faqs ?? [])];
+                          faqs[index] = { ...faq, q: event.target.value };
+                          patchGuide({ faqs });
+                        }}
+                        className="w-full rounded-lg border border-line px-3 py-2 font-medium outline-none focus:border-brand"
+                      />
+                      <textarea
+                        value={faq.a}
+                        rows={2}
+                        placeholder="Respuesta"
+                        onChange={(event) => {
+                          const faqs = [...(guide?.content.faqs ?? [])];
+                          faqs[index] = { ...faq, a: event.target.value };
+                          patchGuide({ faqs });
+                        }}
+                        className="mt-2 w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          patchGuide({ faqs: (guide?.content.faqs ?? []).filter((_, i) => i !== index) })
+                        }
+                        className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted hover:text-alert-ink"
+                      >
+                        <IconTrash size={16} /> Eliminar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => patchGuide({ faqs: [...(guide?.content.faqs ?? []), { q: "", a: "" }] })}
+                  className="mt-3 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
+                >
+                  Añadir pregunta
+                </button>
               </Panel>
 
               <Panel title="Reservas">

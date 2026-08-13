@@ -28,6 +28,7 @@ import {
 import { LOCALE_NAMES, getDictionary } from "@/i18n/dictionaries";
 import type { ContactKind, Guide, Locale, Place, PlaceCategory } from "@/lib/schema";
 import type { StayPhase } from "@/lib/stay";
+import { directionsUrl } from "@/lib/geo";
 import { wifiQrPayload } from "@/lib/wifi";
 import Keepsake from "./Keepsake";
 
@@ -186,7 +187,36 @@ export default function GuideView({ data }: { data: GuestPayload }) {
      both, and asking the guest to "configure" anything is a lost guest. So:
      two chips, no explanation needed, the choice remembered on the device. */
   const [reading, setReading] = useState(false);
-  const order = useMemo(() => sectionOrder(data.phase), [data.phase]);
+  /* A section with nothing in it is not an empty section: it is a section that
+     should not exist yet. Showing "Normas" with no rules under it makes the
+     guide look unfinished and makes the guest doubt the rest of it.
+
+     "Cómo llegar" is the one exception — the address is always there, and it is
+     the single thing a guest needs before anything else. */
+  const filled = useMemo<Record<SectionId, boolean>>(
+    () => ({
+      arrival: true,
+      entry: Boolean(property.accessCode) || guide.arrivalSteps.some((step) => step.trim()),
+      wifi: Boolean(property.wifiSsid || property.wifiPassword || guide.wifiNote.trim()),
+      /* The body is what the guest reads: a heading on its own is a promise the
+         section does not keep. */
+      house: guide.house.some((item) => item.body.trim()),
+      rules: guide.rules.some((rule) => rule.text.trim()),
+      places: places.length > 0,
+      transport: guide.transport.some(
+        (item) => item.body.trim() || item.lat !== undefined,
+      ),
+      emergency: property.contacts.length > 0 || Boolean(guide.emergencyNote.trim()),
+      checkout: guide.checkoutSteps.some((step) => step.trim()),
+      faq: guide.faqs.some((faq) => faq.q.trim()),
+    }),
+    [property, guide, places],
+  );
+
+  const order = useMemo(
+    () => sectionOrder(data.phase).filter((id) => filled[id]),
+    [data.phase, filled],
+  );
 
   /* Service worker registration: the guide is cached on the phone on first
      visit, which is exactly when the guest still has airport Wi-Fi. */
@@ -338,7 +368,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             target="_blank"
             rel="noreferrer"
           >
-            {t.actions.directions} <IconArrow size={16} />
+            {t.actions.navigate} <IconArrow size={16} />
           </a>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <Row icon={<IconClock size={18} />} label={t.labels.checkin} value={property.checkinFrom} compact />
@@ -458,7 +488,9 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     house: (
       <Section id="house" title={t.sections.house} key="house">
         <Card>
-          {guide.house.map((item) => (
+          {guide.house
+            .filter((item) => item.body.trim())
+            .map((item) => (
             <details key={item.title} className="border-b border-line py-3 last:border-0 print-block">
               <summary className="cursor-pointer list-none font-medium">
                 <span className="flex items-center justify-between gap-3">
@@ -468,7 +500,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               </summary>
               <p className="mt-2 text-sm text-muted">{item.body}</p>
             </details>
-          ))}
+            ))}
         </Card>
       </Section>
     ),
@@ -477,7 +509,9 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       <Section id="rules" title={t.sections.rules} key="rules">
         <Card>
           <ul className="space-y-3">
-            {guide.rules.map((rule) => {
+            {guide.rules
+              .filter((rule) => rule.text.trim())
+              .map((rule) => {
               const style =
                 rule.allowed === true
                   ? { chip: "bg-ok-soft text-ok-ink", label: t.rules.allowed, icon: <IconCheck size={14} /> }
@@ -549,9 +583,9 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                     href={place.directions}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium ring-1 ring-brand-line"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3 py-1.5 font-medium text-white"
                   >
-                    <IconMap size={14} /> {place.distance}
+                    <IconWalk size={14} /> {t.actions.navigate} · {place.distance}
                   </a>
                   {place.phone ? (
                     <a
@@ -602,10 +636,22 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     transport: (
       <Section id="transport" title={t.sections.transport} key="transport">
         <Card>
-          {guide.transport.map((item) => (
+          {guide.transport
+            .filter((item) => item.body.trim() || item.lat !== undefined)
+            .map((item) => (
             <div key={item.title} className="border-b border-line py-3 last:border-0">
               <p className="font-medium">{item.title}</p>
               <p className="mt-1 text-sm text-muted">{item.body}</p>
+              {item.lat !== undefined && item.lng !== undefined ? (
+                <a
+                  href={directionsUrl({ lat: item.lat, lng: item.lng, mode: "driving" })}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="no-print mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ring-1 ring-brand-line"
+                >
+                  <IconMap size={14} /> {t.actions.navigate}
+                </a>
+              ) : null}
             </div>
           ))}
         </Card>
@@ -652,7 +698,9 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             {t.labels.checkout} <span className="font-medium text-ink">{property.checkoutUntil}</span>
           </p>
           <ul className="mt-3 space-y-2">
-            {guide.checkoutSteps.map((step, index) => (
+            {guide.checkoutSteps
+              .filter((step) => step.trim())
+              .map((step, index) => (
               <li key={step}>
                 <label className="flex cursor-pointer items-start gap-3 text-sm">
                   <input

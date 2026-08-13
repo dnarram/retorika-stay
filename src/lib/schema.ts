@@ -112,7 +112,20 @@ export const guideSchema = z.object({
   wifiNote: z.string().max(300),
   house: z.array(z.object({ title: z.string().max(60), body: z.string().max(600) })).max(20),
   rules: z.array(ruleSchema).max(20),
-  transport: z.array(z.object({ title: z.string().max(60), body: z.string().max(400) })).max(12),
+  /* Coordinates are optional because most transport entries are advice ("the
+     bus takes two hours"), but the ones that are places — the airport, the
+     station, the taxi rank — become a tappable destination when the host
+     pins them. */
+  transport: z
+    .array(
+      z.object({
+        title: z.string().max(60),
+        body: z.string().max(400),
+        lat: z.number().min(-90).max(90).optional(),
+        lng: z.number().min(-180).max(180).optional(),
+      }),
+    )
+    .max(12),
   emergencyNote: z.string().max(400),
   checkoutSteps: z.array(z.string().max(240)).max(12),
   faqs: z.array(z.object({ q: z.string().max(140), a: z.string().max(600) })).max(20),

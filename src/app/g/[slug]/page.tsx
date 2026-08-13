@@ -119,7 +119,7 @@ export default async function GuidePage(props: {
          not serialised: not hidden, simply absent from the HTML. */
       accessCode: reveal ? (stay?.accessCodeOverride ?? property.accessCode) : null,
       wifiPassword: reveal ? property.wifiPassword : null,
-      directions: directionsUrl({ lat: property.lat, lng: property.lng }),
+      directions: directionsUrl({ lat: property.lat, lng: property.lng, mode: "driving" }),
     },
     guide: guide.content,
     /* If the language served is not the host's own, it is a machine
@@ -137,7 +137,7 @@ export default async function GuidePage(props: {
           walkMin: walkingMinutes(origin, place),
           distance: formatDistance(meters),
           meters: Math.round(meters),
-          directions: directionsUrl(place),
+          directions: directionsUrl({ lat: place.lat, lng: place.lng, mode: "walking" }),
         };
       })
       .sort((a, b) => a.meters - b.meters),
