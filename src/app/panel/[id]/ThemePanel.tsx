@@ -2,11 +2,10 @@
 
 import {
   FONTS,
-  ORNAMENTS,
   PALETTES,
   RADII,
+  STYLES,
   fontOf,
-  ornamentStyle,
   paletteOf,
   themeVars,
   type Theme,
@@ -116,21 +115,71 @@ export default function ThemePanel({
         ))}
       </div>
 
-      {/* Ornament ---------------------------------------------------------- */}
-      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Textura</p>
-      <div className="mt-2 grid grid-cols-4 gap-2">
-        {ORNAMENTS.map((option) => (
+      {/* Style ------------------------------------------------------------- */}
+      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">
+        Estilo de las secciones
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {STYLES.map((option) => (
           <button
             key={option.id}
             type="button"
-            onClick={() => onChange({ ornament: option.id })}
-            aria-pressed={theme.ornament === option.id}
-            title={option.name}
-            className={`h-10 rounded-lg ring-1 transition ${
-              theme.ornament === option.id ? "ring-2 ring-brand" : "ring-line hover:ring-brand-line"
+            onClick={() => onChange({ style: option.id })}
+            aria-pressed={theme.style === option.id}
+            className={`rounded-xl p-2 ring-1 transition ${
+              theme.style === option.id ? "ring-2 ring-brand" : "ring-line hover:ring-brand-line"
             }`}
-            style={ornamentStyle({ ...theme, ornament: option.id })}
-          />
+          >
+            {/* Each thumbnail is the treatment itself, drawn small: a host
+                should recognise what they are choosing without reading a word
+                of explanation. */}
+            <span className="block" style={{ color: palette.body }}>
+              {option.id === "sereno" ? (
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="h-4 w-4 rounded-full"
+                    style={{ background: palette.soft }}
+                  />
+                  <span className="flex-1">
+                    <span className="block h-1.5 w-10 rounded" style={{ background: palette.body }} />
+                    <span
+                      className="mt-1 block h-0.5 w-4 rounded"
+                      style={{ background: palette.brand }}
+                    />
+                  </span>
+                </span>
+              ) : option.id === "editorial" ? (
+                <span className="block">
+                  <span className="block h-px w-full" style={{ background: palette.line }} />
+                  <span
+                    className="mt-1.5 block h-1.5 w-12 rounded"
+                    style={{ background: palette.body }}
+                  />
+                </span>
+              ) : option.id === "banda" ? (
+                <span
+                  className="flex h-6 items-center gap-1.5 px-1.5"
+                  style={{ background: palette.ink, borderRadius: 6 }}
+                >
+                  <span className="h-2 w-2 rounded-full bg-white/70" />
+                  <span className="h-1.5 w-9 rounded bg-white/80" />
+                </span>
+              ) : (
+                <span className="flex flex-col items-center">
+                  <span
+                    className="h-4 w-4 rounded-full border"
+                    style={{ borderColor: palette.line }}
+                  />
+                  <span className="mt-1 flex items-center gap-1">
+                    <span className="h-px w-2.5" style={{ background: palette.line }} />
+                    <span className="h-1.5 w-7 rounded" style={{ background: palette.body }} />
+                    <span className="h-px w-2.5" style={{ background: palette.line }} />
+                  </span>
+                </span>
+              )}
+            </span>
+            <span className="mt-1.5 block text-[11px] text-muted">{option.name}</span>
+          </button>
         ))}
       </div>
 
@@ -139,8 +188,11 @@ export default function ThemePanel({
         className="mt-5 overflow-hidden rounded-xl border"
         style={{ ...themeVars(theme), borderColor: palette.line }}
       >
-        <div className="px-3 pb-3 pt-3 text-white" style={ornamentStyle(theme)}>
-          <p className="text-[9px] uppercase tracking-[0.2em] text-white/70">Guía de bienvenida</p>
+        <div
+          className={`px-3 pb-3 pt-3 text-white ${theme.style === "sello" ? "text-center" : ""}`}
+          style={{ background: palette.ink }}
+        >
+          <p className="text-[9px] uppercase tracking-[0.22em] text-white/70">Guía de bienvenida</p>
           <p
             className="mt-1 text-sm font-semibold"
             style={{ fontFamily: `${font.display}, system-ui` }}
@@ -148,6 +200,12 @@ export default function ThemePanel({
             {propertyName || "Tu alojamiento"}
           </p>
           <p className="text-[10px] text-white/70">{city || "Ciudad"}</p>
+          {theme.style === "banda" ? (
+            <span className="mt-2 block h-1 w-8 rounded-full bg-white/70" />
+          ) : null}
+          {theme.style === "sello" ? (
+            <span className="mx-auto mt-2 block h-px w-12 bg-white/40" />
+          ) : null}
         </div>
         <div className="p-3" style={{ background: palette.canvas }}>
           <div
@@ -159,12 +217,25 @@ export default function ThemePanel({
               fontFamily: `${font.body}, system-ui`,
             }}
           >
-            <p
-              className="text-[11px] font-semibold"
-              style={{ fontFamily: `${font.display}, system-ui`, color: palette.body }}
-            >
-              Entrada
-            </p>
+            {theme.style === "banda" ? (
+              <p
+                className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white"
+                style={{
+                  fontFamily: `${font.display}, system-ui`,
+                  background: palette.ink,
+                  borderRadius: "var(--radius-card)",
+                }}
+              >
+                Entrada
+              </p>
+            ) : (
+              <p
+                className={`text-[11px] font-semibold ${theme.style === "sello" ? "text-center" : ""}`}
+                style={{ fontFamily: `${font.display}, system-ui`, color: palette.body }}
+              >
+                Entrada
+              </p>
+            )}
             <p className="mt-0.5 text-[10px]" style={{ color: palette.body, opacity: 0.7 }}>
               La caja de llaves está a la izquierda del portal.
             </p>

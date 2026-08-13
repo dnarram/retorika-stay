@@ -205,7 +205,7 @@ const toProperty = (row: PropertyRow): Property => ({
   accessCodeUpdatedAt: toISOStamp(row.access_code_updated_at),
   contacts: row.contacts ?? [],
   hiddenSections: row.hidden_sections ?? [],
-  theme: row.theme ?? { palette: "retorika", font: "moderna", radius: "suave", ornament: "ninguno" },
+  theme: row.theme ?? { palette: "retorika", font: "moderna", radius: "suave", style: "sereno" },
   defaultLocale: row.default_locale,
   published: row.published,
   pin: row.pin,

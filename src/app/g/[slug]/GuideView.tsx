@@ -28,9 +28,11 @@ import {
 import { LOCALE_NAMES, getDictionary, type Dict } from "@/i18n/dictionaries";
 import type { ContactKind, Guide, Locale, Place, PlaceCategory } from "@/lib/schema";
 import type { StayPhase } from "@/lib/stay";
-import { ornamentStyle, themeVars } from "@/lib/theme";
+import type { StyleId } from "@/lib/theme";
+import { styleOf, themeVars } from "@/lib/theme";
 import type { Theme } from "@/lib/theme";
 import { wifiQrPayload } from "@/lib/wifi";
+import { GuideMasthead, SectionDivider, SectionHeading } from "./Chrome";
 import Helpful from "./Helpful";
 import Keepsake from "./Keepsake";
 import RouteActions from "./RouteActions";
@@ -228,6 +230,12 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     [property, guide, recommendations, emergencyPlaces],
   );
 
+  const style = styleOf(data.theme);
+  const sectionIcon = (id: SectionId) => {
+    const Icon = SECTION_ICON[id];
+    return <Icon size={18} />;
+  };
+
   const order = useMemo(
     () =>
       sectionOrder(data.phase).filter(
@@ -377,7 +385,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
 
   const sections: Record<SectionId, React.ReactNode> = {
     arrival: (
-      <Section id="arrival" title={t.sections.arrival} key="arrival" slug={property.slug} t={t} ask={!reading}>
+      <Section id="arrival" title={t.sections.arrival} key="arrival" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("arrival")}>
         <Card>
           <Row icon={<IconPin size={18} />} label={t.labels.address} value={property.address} />
           <div className="mt-3 flex flex-wrap gap-2 no-print">
@@ -402,7 +410,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     entry: (
-      <Section id="entry" title={t.sections.entry} key="entry" slug={property.slug} t={t} ask={!reading}>
+      <Section id="entry" title={t.sections.entry} key="entry" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("entry")}>
         <Card>
           <ol className="space-y-2 text-sm">
             {guide.arrivalSteps.map((step, index) => (
@@ -453,7 +461,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     wifi: (
-      <Section id="wifi" title={t.sections.wifi} key="wifi" slug={property.slug} t={t} ask={!reading}>
+      <Section id="wifi" title={t.sections.wifi} key="wifi" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("wifi")}>
         <Card>
           <dl className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
@@ -503,7 +511,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     house: (
-      <Section id="house" title={t.sections.house} key="house" slug={property.slug} t={t} ask={!reading}>
+      <Section id="house" title={t.sections.house} key="house" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("house")}>
         <Card>
           {guide.house
             .filter((item) => item.body.trim())
@@ -523,7 +531,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     rules: (
-      <Section id="rules" title={t.sections.rules} key="rules" slug={property.slug} t={t} ask={!reading}>
+      <Section id="rules" title={t.sections.rules} key="rules" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("rules")}>
         <Card>
           <ul className="space-y-3">
             {guide.rules
@@ -553,7 +561,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     places: (
-      <Section id="places" title={t.sections.places} key="places" slug={property.slug} t={t} ask={!reading}>
+      <Section id="places" title={t.sections.places} key="places" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("places")}>
         <div className="no-print -mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
           <Chip active={category === "todas"} onClick={() => setCategory("todas")}>
             {t.actions.seeAll}
@@ -653,7 +661,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     transport: (
-      <Section id="transport" title={t.sections.transport} key="transport" slug={property.slug} t={t} ask={!reading}>
+      <Section id="transport" title={t.sections.transport} key="transport" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("transport")}>
         <Card>
           {guide.transport
             .filter((item) => item.body.trim() || item.lat !== undefined)
@@ -677,7 +685,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     emergency: (
-      <Section id="emergency" title={t.sections.emergency} key="emergency" slug={property.slug} t={t} ask={!reading}>
+      <Section id="emergency" title={t.sections.emergency} key="emergency" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("emergency")}>
         <Card>
           <p className="flex gap-2 rounded-xl bg-alert-soft p-3 text-sm text-alert-ink">
             <IconAlert size={18} />
@@ -763,7 +771,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     checkout: (
-      <Section id="checkout" title={t.sections.checkout} key="checkout" slug={property.slug} t={t} ask={!reading}>
+      <Section id="checkout" title={t.sections.checkout} key="checkout" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("checkout")}>
         <Card>
           <p className="text-sm text-muted">
             {t.labels.checkout} <span className="font-medium text-ink">{property.checkoutUntil}</span>
@@ -790,7 +798,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     ),
 
     faq: (
-      <Section id="faq" title={t.sections.faq} key="faq" slug={property.slug} t={t} ask={!reading}>
+      <Section id="faq" title={t.sections.faq} key="faq" slug={property.slug} t={t} ask={!reading} style={style} icon={sectionIcon("faq")}>
         <Card>
           {visibleFaqs.map((faq) => (
             <details key={faq.q} className="border-b border-line py-3 last:border-0 print-block">
@@ -813,29 +821,31 @@ export default function GuideView({ data }: { data: GuestPayload }) {
         Ir al contenido
       </a>
 
-      <header className="px-5 pb-5 pt-6 text-white" style={ornamentStyle(data.theme)}>
+      <header className="relative bg-brand-ink px-5 pb-6 pt-6 text-white">
         <div className="mx-auto max-w-2xl lg:max-w-6xl">
-          {data.isOwner ? (
-            <a
-              href="/panel"
-              className="no-print mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white"
-            >
-              ← Mis alojamientos
-            </a>
-          ) : null}
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs uppercase tracking-[0.2em] text-white/70">{t.guideTitle}</span>
-            <LanguageSwitcher
-              current={data.locale}
-              autoTranslated={data.autoTranslated}
-              note={t.autoTranslated}
-            />
-          </div>
-          <h1 className="mt-3 font-display text-2xl font-semibold">{guide.welcomeTitle}</h1>
-          <p className="text-sm text-white/70">
-            {property.city} · {t.labels.host}: {property.hostName}
-          </p>
-
+          <GuideMasthead
+            style={style}
+            eyebrow={t.guideTitle}
+            title={guide.welcomeTitle}
+            subtitle={`${property.city} · ${t.labels.host}: ${property.hostName}`}
+            aside={
+              <LanguageSwitcher
+                current={data.locale}
+                autoTranslated={data.autoTranslated}
+                note={t.autoTranslated}
+              />
+            }
+            back={
+              data.isOwner ? (
+                <a
+                  href="/panel"
+                  className="no-print mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white"
+                >
+                  ← Mis alojamientos
+                </a>
+              ) : null
+            }
+          />
         </div>
       </header>
 
@@ -951,7 +961,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 empty margins. Two columns halve the scrolling and, just as
                 important, keep the line length readable: text stretched across
                 1400 px is worse than text in a column, not better. */}
-            {order.map((id) => {
+            {order.map((id, index) => {
                 const Icon = SECTION_ICON[id];
                 const current = (active ?? order[0]) === id;
                 return (
@@ -982,7 +992,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 empty margins. Two columns halve the scrolling and, just as
                 important, keep the line length readable: text stretched across
                 1400 px is worse than text in a column, not better. */}
-            {order.map((id) => {
+            {order.map((id, index) => {
                   const Icon = SECTION_ICON[id];
                   return (
                     <li key={id}>
@@ -1017,7 +1027,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 empty margins. Two columns halve the scrolling and, just as
                 important, keep the line length readable: text stretched across
                 1400 px is worse than text in a column, not better. */}
-            {order.map((id) => {
+            {order.map((id, index) => {
               /* Hidden, never unmounted: `print:block` puts every section back
                  on paper regardless of what is on screen. */
               /* While the guest is typing, the sections that can actually
@@ -1035,6 +1045,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               ].join(" ");
               return (
                 <div key={id} className={classes}>
+                  {reading && index > 0 ? <SectionDivider style={style} /> : null}
                   {sections[id]}
                 </div>
               );
@@ -1120,12 +1131,16 @@ function Section({
   slug,
   t,
   ask,
+  style,
+  icon,
 }: {
   id: string;
   title: string;
   children: React.ReactNode;
   slug?: string;
   t?: Dict;
+  style: StyleId;
+  icon: React.ReactNode;
   /* Asking per section AND about the whole guide at once is two questions on
      one screen, and the second one makes the first look like a survey. Section
      mode asks about the section the guest just read; reading mode, where the
@@ -1134,7 +1149,7 @@ function Section({
 }) {
   return (
     <section id={id} className="mt-8 scroll-mt-20">
-      <h2 className="mb-3 font-display text-lg font-semibold">{title}</h2>
+      <SectionHeading style={style} title={title} icon={icon} />
       <div className="space-y-3">{children}</div>
       {slug && t && ask ? (
         <Helpful

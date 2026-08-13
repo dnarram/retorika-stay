@@ -161,21 +161,48 @@ export const RADII = [
   { id: "recto", name: "Recto", value: "4px" },
 ] as const;
 
-/* A single ornament band behind the header. It is the one decorative element in
-   the whole guide, which is exactly why there is only one of it: spend the
-   boldness in one place and keep everything around it quiet. */
-export const ORNAMENTS = [
-  { id: "ninguno", name: "Ninguno" },
-  { id: "arcos", name: "Arcos" },
-  { id: "olas", name: "Olas" },
-  { id: "puntos", name: "Puntos" },
+/* ---------------------------------------------------------------------------
+   Section and header treatment.
+
+   The texture strip this replaces was decoration with nothing to say, and it
+   showed. What actually gives a printed welcome book its character is not a
+   pattern behind the title — it is how the title is set, how each section is
+   announced, and what separates one from the next. Change those three and the
+   same words read as a different document.
+
+   Four directions, each a coherent set rather than a slider:
+
+     · Sereno    — a hairline under each heading, the section icon in a soft
+                   disc. Quiet, contemporary, gets out of the way.
+     · Editorial — a letterspaced eyebrow above a large title, rules above and
+                   below. The voice of a printed magazine.
+     · Banda     — the section name inside a filled band, the way a designed
+                   welcome book blocks its headings. The most graphic of the
+                   four.
+     · Sello     — centred headings with the icon in an outlined circle and a
+                   rule to either side. The framed poster hanging in the hall.
+
+   None of them changes a single word of the guide, and none of them touches the
+   semantic colours or the reading order.
+--------------------------------------------------------------------------- */
+export const STYLES = [
+  { id: "sereno", name: "Sereno" },
+  { id: "editorial", name: "Editorial" },
+  { id: "banda", name: "Banda" },
+  { id: "sello", name: "Sello" },
 ] as const;
+
+export type StyleId = (typeof STYLES)[number]["id"];
+
+export function styleOf(theme: Theme): StyleId {
+  return (STYLES.find((s) => s.id === theme.style)?.id ?? "sereno") as StyleId;
+}
 
 export const themeSchema = z.object({
   palette: z.string().max(24).default("retorika"),
   font: z.string().max(24).default("moderna"),
   radius: z.string().max(24).default("suave"),
-  ornament: z.string().max(24).default("ninguno"),
+  style: z.string().max(24).default("sereno"),
 });
 export type Theme = z.infer<typeof themeSchema>;
 
@@ -183,7 +210,7 @@ export const DEFAULT_THEME: Theme = {
   palette: "retorika",
   font: "moderna",
   radius: "suave",
-  ornament: "ninguno",
+  style: "sereno",
 };
 
 export function paletteOf(theme: Theme): Palette {
@@ -223,29 +250,4 @@ export function fontsHref(theme: Theme): string {
   const font = fontOf(theme);
   const families = font.families.map((family) => `family=${family}`).join("&");
   return `https://fonts.googleapis.com/css2?${families}&display=swap`;
-}
-
-/* Ornaments are inline SVG data URIs: no extra request, no image to host, and
-   they inherit nothing so they cannot fight the palette. Kept at low opacity —
-   this is a texture, not a pattern. */
-export function ornamentStyle(theme: Theme): React.CSSProperties {
-  const palette = paletteOf(theme);
-  const stroke = encodeURIComponent("#ffffff");
-
-  const svg: Record<string, string> = {
-    arcos: `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60' viewBox='0 0 120 60'><g fill='none' stroke='${stroke}' stroke-width='1.5'><path d='M0 60 A30 30 0 0 1 60 60'/><path d='M60 60 A30 30 0 0 1 120 60'/></g></svg>`,
-    olas: `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='40' viewBox='0 0 120 40'><path d='M0 30 Q15 12 30 30 T60 30 T90 30 T120 30' fill='none' stroke='${stroke}' stroke-width='1.5'/></svg>`,
-    puntos: `<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><circle cx='4' cy='4' r='1.6' fill='${stroke}'/></svg>`,
-  };
-
-  if (!svg[theme.ornament]) return { backgroundColor: palette.ink };
-
-  return {
-    backgroundColor: palette.ink,
-    backgroundImage: `url("data:image/svg+xml,${svg[theme.ornament].replace(/#/g, "%23")}")`,
-    backgroundRepeat: "repeat",
-    /* Low enough to read as texture on a photograph of the screen, which is how
-       most people will first see it. */
-    backgroundBlendMode: "soft-light",
-  };
 }

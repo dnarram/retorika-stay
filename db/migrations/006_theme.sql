@@ -8,6 +8,6 @@ begin;
 -- radius and header ornament. Stored as JSONB because it is read whole, written
 -- whole and never queried by part.
 alter table properties add column if not exists theme jsonb not null
-  default '{"palette":"retorika","font":"moderna","radius":"suave","ornament":"ninguno"}'::jsonb;
+  default '{"palette":"retorika","font":"moderna","radius":"suave","style":"sereno"}'::jsonb;
 
 commit;
