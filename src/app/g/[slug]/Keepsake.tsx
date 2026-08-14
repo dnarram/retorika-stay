@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { IconArrow, IconCheck, IconTrash } from "@/components/icons";
 import type { Dict } from "@/i18n/dictionaries";
 import { paletteOf, fontOf, type Theme } from "@/lib/theme";
+import { zipStore } from "@/lib/zip";
 
 /* ---------------------------------------------------------------------------
    The keepsake: a guest's stay, laid out as an Instagram carousel.
@@ -75,6 +76,8 @@ export default function Keepsake({
      appear twice. */
   const [cover, setCover] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
 
   const palette = paletteOf(theme);
@@ -1078,18 +1081,18 @@ export default function Keepsake({
     });
   }
 
-  async function renderSlide(index: number, size: { w: number; h: number }): Promise<Blob | null> {
+  async function renderSlide(index: number, size: { w: number; h: number }): Promise<Blob> {
     const canvas = document.createElement("canvas");
     canvas.width = size.w;
     canvas.height = size.h;
     const c = canvas.getContext("2d");
-    if (!c) return null;
+    if (!c) throw new Error("2d context unavailable");
     c.textBaseline = "alphabetic";
     const { w: W, h: H } = size;
 
     if (index === 0) {
       drawCover(c, W, H, heroSrc ? await loadImage(heroSrc) : undefined);
-      return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+      return toBlob(canvas);
     }
 
     if (index <= filled.length) {
@@ -1104,34 +1107,86 @@ export default function Keepsake({
         const arrival = album.llegada[0] ? await loadImage(album.llegada[0]) : undefined;
         drawDespedida(c, W, H, images[0], arrival);
       }
-      return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+      return toBlob(canvas);
     }
 
     if (index === filled.length + 1) {
       const last = filled[filled.length - 1];
       drawStats(c, W, H, await loadImage(album[last][album[last].length - 1]));
-      return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+      return toBlob(canvas);
     }
 
     drawClosing(c, W, H, heroSrc ? await loadImage(heroSrc) : undefined);
-    return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    return toBlob(canvas);
   }
 
+  /* toBlob can return null, and the first version treated that as "skip this
+     slide" — which is how a carousel quietly came out with eight images instead
+     of nine. Now a failure is a failure: it retries once at a lower quality and
+     then gives up loudly. */
+  async function toBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+    const attempt = (quality: number) =>
+      new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    const blob = (await attempt(0.92)) ?? (await attempt(0.8));
+    if (!blob) throw new Error("canvas.toBlob returned null");
+    return blob;
+  }
+
+  /* One archive, one download, one permission prompt.
+
+     Nine separate downloads is what produced both of the problems the guest
+     saw: browsers throttle bursts and ask to approve "multiple files", and a
+     burst broken up by pauses reads as more than one burst, so the prompt
+     appears twice. Worse, the old loop revoked each object URL immediately
+     after clicking it — while the browser might not have finished reading the
+     blob — which is why the missing slide was never the same one twice. */
   async function download(size: { w: number; h: number }, suffix: string) {
     setBusy(true);
-    for (let index = 0; index < slideCount; index += 1) {
-      const blob = await renderSlide(index, size);
-      if (!blob) continue;
-      const url = URL.createObjectURL(blob);
+    setError(null);
+    try {
+      const entries: { name: string; blob: Blob }[] = [];
+      for (let index = 0; index < slideCount; index += 1) {
+        setProgress({ done: index, total: slideCount });
+        const blob = await renderSlide(index, size);
+        entries.push({
+          name: `${String(index + 1).padStart(2, "0")}-${suffix}.jpg`,
+          blob,
+        });
+      }
+      setProgress({ done: slideCount, total: slideCount });
+
+      const archive = await zipStore(entries);
+      const filename = `${slug}-${suffix}.zip`;
+
+      /* On a phone, sharing beats downloading: the guest can hand the images
+         straight to Instagram instead of hunting for them in Files. */
+      const file = new File([archive], filename, { type: "application/zip" });
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: propertyName });
+          return;
+        } catch {
+          /* cancelled or unsupported in practice: fall through to download */
+        }
+      }
+
+      const url = URL.createObjectURL(archive);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${slug}-${suffix}-${String(index + 1).padStart(2, "0")}.jpg`;
+      link.download = filename;
+      /* Attached to the document before clicking: a detached anchor is ignored
+         by some browsers, which is its own silent failure. */
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
-      /* Browsers throttle a burst of downloads; a short gap keeps them all. */
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      link.remove();
+      /* Revoked late, and only after the browser has had time to read it. */
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      setError(t.memory.failed);
+    } finally {
+      setBusy(false);
+      setProgress(null);
     }
-    setBusy(false);
   }
 
   /* Live preview of the cover, so the guest sees the thing before committing to
@@ -1264,7 +1319,12 @@ export default function Keepsake({
               onClick={() => download(CAROUSEL, "carrusel")}
               className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-brand-ink disabled:opacity-40"
             >
-              {busy ? t.memory.downloading : t.memory.downloadCarousel} <IconArrow size={15} />
+              {busy
+                ? progress
+                  ? `${progress.done} / ${progress.total}`
+                  : t.memory.downloading
+                : t.memory.downloadCarousel}{" "}
+              <IconArrow size={15} />
             </button>
             <button
               type="button"
@@ -1275,7 +1335,10 @@ export default function Keepsake({
               {t.memory.downloadStory}
             </button>
           </div>
-          {slideCount > 0 ? <p className="mt-2 text-[11px] text-white/50">{t.memory.hint}</p> : null}
+          {error ? <p className="mt-2 text-[11px] text-white">{error}</p> : null}
+          {slideCount > 0 && !error ? (
+            <p className="mt-2 text-[11px] text-white/50">{t.memory.hint}</p>
+          ) : null}
         </div>
       </div>
     </div>
