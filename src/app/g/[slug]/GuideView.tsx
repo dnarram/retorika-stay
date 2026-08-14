@@ -34,7 +34,7 @@ import type { Theme } from "@/lib/theme";
 import { wifiQrPayload } from "@/lib/wifi";
 import { GuideMasthead, SectionDivider, SectionHeading } from "./Chrome";
 import Helpful from "./Helpful";
-import Keepsake from "./Keepsake";
+import Keepsake, { KeepsakeTeaser } from "./Keepsake";
 import RouteActions from "./RouteActions";
 
 const PlacesMap = dynamic(() => import("./PlacesMap"), {
@@ -909,6 +909,12 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           />
         </div>
 
+        {/* Announced on arrival, not on the last morning: a keepsake somebody
+            knew about is made of photographs somebody meant to take. */}
+        {data.audience === "booking" && data.phase !== "memories" ? (
+          <KeepsakeTeaser t={t} slug={property.slug} />
+        ) : null}
+
         {data.phase === "memories" && data.stay ? (
           <section className="mt-8 rounded-card bg-brand-ink p-6 text-white">
             <h2 className="font-display text-lg font-semibold">{t.phase.memories}</h2>
@@ -926,15 +932,14 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               ))}
             </dl>
             <Keepsake
-              title={guide.welcomeTitle}
+              t={t}
+              theme={data.theme}
+              slug={property.slug}
+              propertyName={propertyName(guide.welcomeTitle, property.name)}
               city={property.city}
-              label={t.tripCard}
-              hint={t.tripCardHint}
-              stats={[
-                { value: String(visitedPlaces.length), label: t.tripPlaces },
-                { value: String(data.stay.nights), label: t.tripNights },
-                { value: kmWalked, label: t.tripWalk },
-              ]}
+              nights={data.stay.nights}
+              visitedNames={visitedPlaces.map((place) => place.name)}
+              km={kmWalked}
             />
           </section>
         ) : null}
@@ -1123,6 +1128,12 @@ export default function GuideView({ data }: { data: GuestPayload }) {
 }
 
 /* --------------------------------- pieces --------------------------------- */
+
+/* The guide's own title is what the guest recognises; the internal name is the
+   fallback for a host who never wrote one. */
+function propertyName(welcomeTitle: string, fallback: string): string {
+  return welcomeTitle.trim() || fallback;
+}
 
 function Section({
   id,

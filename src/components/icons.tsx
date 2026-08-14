@@ -169,3 +169,9 @@ export const IconGrid = ({ size = 20, className }: IconProps) => (
     <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
   </svg>
 );
+
+export const IconTrash = ({ size = 20, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 11v5.5M13.5 11v5.5" />
+  </svg>
+);
