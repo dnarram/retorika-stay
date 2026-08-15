@@ -24,6 +24,11 @@ export async function POST(request: Request) {
 
   await repo.track(property.id, kind, value.slice(0, 60));
 
+  /* If the link belongs to a booking, the first open is stamped on it. This is
+     the only place a metric touches something the host can put a name to, and
+     it stops at a date on purpose. */
+  if (kind === "open" && stay) await repo.markStayOpened(stay.id);
+
   /* Device shape, recorded alongside the "open" event and nowhere else.
 
      It is an ESTIMATE, not a fact: it reads the User-Agent, which is spoofable

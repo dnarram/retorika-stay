@@ -1156,6 +1156,16 @@ export default function Keepsake({
       setProgress({ done: slideCount, total: slideCount });
 
       const archive = await zipStore(entries);
+      try {
+        navigator.sendBeacon?.(
+          "/api/track",
+          new Blob([JSON.stringify({ slug, kind: "keepsake", value: suffix })], {
+            type: "application/json",
+          }),
+        );
+      } catch {
+        /* the keepsake matters, the counter does not */
+      }
       const filename = `${slug}-${suffix}.zip`;
 
       /* Download, always. An earlier version handed the archive straight to the

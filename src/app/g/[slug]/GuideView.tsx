@@ -186,6 +186,13 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   /* null = the guest is on the hub. On large screens there is no hub: the
      sidebar is always visible and a section is always open. */
   const [active, setActive] = useState<SectionId | null>(null);
+
+  /* Which sections get opened is the closest thing to "what did they need",
+     and unlike time-on-page it means something. */
+  const openSection = (id: SectionId) => {
+    setActive(id);
+    track(property.slug, "section", id);
+  };
   /* Two guests, two behaviours, one guide.
 
      Before the trip somebody reads the whole thing on the sofa; on the third
@@ -268,6 +275,14 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   useEffect(() => {
     track(property.slug, "open");
     track(property.slug, "language", data.locale);
+    /* "Unique" is decided by the device, not by the server: the phone remembers
+       that it already counted, and we only ever receive a number. Nobody is
+       identified and the figure still means what it says. */
+    const key = `counted_${property.slug}`;
+    if (!localStorage.getItem(key)) {
+      localStorage.setItem(key, "1");
+      track(property.slug, "unique");
+    }
   }, [property.slug, data.locale]);
 
   /* Searches that return nothing are the single most useful metric: they tell
@@ -394,6 +409,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               to={{ lat: property.lat, lng: property.lng }}
               t={t}
               defaultMode="driving"
+              onGo={() => track(property.slug, "directions", "alojamiento")}
             />
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -445,7 +461,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               ) : (
                 <button
                   type="button"
-                  onClick={() => setShowCode(true)}
+                  onClick={() => {
+                    setShowCode(true);
+                    track(property.slug, "reveal");
+                  }}
                   className="mt-2 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-brand-deep ring-1 ring-brand-line no-print"
                 >
                   <IconKey size={16} /> {t.actions.reveal}
@@ -614,6 +633,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                   <RouteActions
                     to={{ lat: place.lat, lng: place.lng }}
                     t={t}
+                    onGo={() => track(property.slug, "directions", place.name)}
                   />
                   {place.phone ? (
                     <a
@@ -676,6 +696,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                     to={{ lat: item.lat, lng: item.lng }}
                     t={t}
                     defaultMode="driving"
+                    onGo={() => track(property.slug, "directions", item.title)}
                   />
                 </div>
               ) : null}
@@ -752,6 +773,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                         to={{ lat: place.lat, lng: place.lng }}
                         t={t}
                         defaultMode="driving"
+                        onGo={() => track(property.slug, "directions", place.name)}
                       />
                       {place.phone ? (
                         <a
@@ -982,7 +1004,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                   <li key={id}>
                     <button
                       type="button"
-                      onClick={() => setActive(id)}
+                      onClick={() => openSection(id)}
                       aria-current={current ? "true" : undefined}
                       className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
                         current ? "bg-brand text-white" : "text-muted hover:bg-brand-soft"
@@ -1012,7 +1034,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                     <li key={id}>
                       <button
                         type="button"
-                        onClick={() => setActive(id)}
+                        onClick={() => openSection(id)}
                         className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-card border border-line bg-white p-3 text-center transition active:scale-95"
                       >
                         <span className="text-brand">
@@ -1100,7 +1122,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             </div>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => {
+                track(property.slug, "print");
+                window.print();
+              }}
               className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white"
             >
               <IconPrint size={16} /> {t.actions.print}

@@ -25,13 +25,7 @@ export type PropertyRow = {
     revoked: boolean;
     phase: StayPhase;
   }[];
-  metrics: {
-    opens: number;
-    languages: { value: string; count: number }[];
-    devices: { value: string; count: number }[];
-    helpful: { value: string; count: number }[];
-    misses: { value: string; count: number }[];
-  };
+  metrics: { openRate: number | null; opens: number; attention: number };
 };
 
 const PHASE_LABEL: Record<StayPhase, string> = {
@@ -439,49 +433,45 @@ export default function PanelClient({
               )}
             </div>
 
-            {row.metrics.opens > 0 ? (
-              <div className="mt-5 rounded-xl bg-canvas p-3 text-sm">
+            {/* Three figures and a door. The detail lives on its own page: a
+                property card that tries to be a dashboard stops being a card. */}
+            <div className="mt-5 rounded-xl bg-canvas p-3">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted">
                   Cómo la usan tus huéspedes
                 </p>
-                <p className="mt-2">
-                  {row.metrics.opens} {row.metrics.opens === 1 ? "apertura" : "aperturas"}
-                  {row.metrics.languages.length > 0
-                    ? ` · ${row.metrics.languages
-                        .map((lang) => `${lang.value.toUpperCase()} ${lang.count}`)
-                        .join(" · ")}`
-                    : null}
-                </p>
-                {row.metrics.devices.length > 0 ? (
-                  <p className="mt-1 text-muted">
-                    Dispositivo aproximado:{" "}
-                    {row.metrics.devices.map((d) => `${d.value} ${d.count}`).join(" · ")}
-                  </p>
-                ) : null}
-                {row.metrics.helpful.length > 0 ? (
-                  <p className="mt-1 text-muted">
-                    ¿Les sirvió?{" "}
-                    <span className="text-ink">
-                      {row.metrics.helpful.filter((h) => h.value.endsWith(":si")).reduce((n, h) => n + h.count, 0)} sí
-                    </span>{" "}
-                    ·{" "}
-                    {row.metrics.helpful
-                      .filter((h) => h.value.endsWith(":no"))
-                      .map((h) => `${h.value.split(":")[0]} (${h.count})`)
-                      .join(", ") || "ningún no"}
-                  </p>
-                ) : null}
-                {row.metrics.misses.length > 0 ? (
-                  <p className="mt-2 text-muted">
-                    Buscaron y no encontraron:{" "}
-                    <span className="text-ink">
-                      {row.metrics.misses.map((miss) => `"${miss.value}"`).join(", ")}
-                    </span>
-                    . Puede que falte en tu guía.
-                  </p>
-                ) : null}
+                <Link
+                  href={`/panel/${row.id}/uso`}
+                  className="text-xs font-medium text-brand-deep underline"
+                >
+                  ver detalle
+                </Link>
               </div>
-            ) : null}
+              <dl className="mt-2 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <dt className="font-display text-xl font-semibold text-brand-deep">
+                    {row.metrics.openRate === null ? "—" : `${row.metrics.openRate}%`}
+                  </dt>
+                  <dd className="text-[11px] text-muted">reservas que la abren</dd>
+                </div>
+                <div>
+                  <dt className="font-display text-xl font-semibold text-brand-deep">
+                    {row.metrics.opens}
+                  </dt>
+                  <dd className="text-[11px] text-muted">aperturas</dd>
+                </div>
+                <div>
+                  <dt
+                    className={`font-display text-xl font-semibold ${
+                      row.metrics.attention > 0 ? "text-alert-ink" : "text-ok-ink"
+                    }`}
+                  >
+                    {row.metrics.attention}
+                  </dt>
+                  <dd className="text-[11px] text-muted">requieren atención</dd>
+                </div>
+              </dl>
+            </div>
 
             <div className="mt-5 flex flex-wrap gap-2 text-sm">
               <Link

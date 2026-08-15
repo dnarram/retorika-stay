@@ -884,6 +884,7 @@ export const STAYS: Stay[] = [
     accessCodeOverride: null,
     pin: null,
     revoked: false,
+    openedAt: null,
   },
   {
     id: "stay_ronda_proxima",
@@ -896,6 +897,7 @@ export const STAYS: Stay[] = [
     /* PIN-protected booking: shows that the PIN is set per guest. */
     pin: "2610",
     revoked: false,
+    openedAt: null,
   },
   {
     id: "stay_madrid_pasada",
@@ -907,5 +909,6 @@ export const STAYS: Stay[] = [
     accessCodeOverride: null,
     pin: null,
     revoked: false,
+    openedAt: null,
   },
 ];

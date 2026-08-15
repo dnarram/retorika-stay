@@ -69,6 +69,8 @@ create table if not exists stays (
   access_code_override text,
   pin                  text check (pin ~ '^[0-9]{4}$'),
   revoked              boolean not null default false,
+  -- was this booking's guide ever opened, and when
+  opened_at            timestamptz,
   created_at           timestamptz not null default now(),
   constraint stay_range check (departure >= arrival)
 );
@@ -82,7 +84,8 @@ create table if not exists metrics (
   property_id text not null references properties(id) on delete cascade,
   day         date not null default current_date,
   kind        text not null check (kind in
-                ('open','language','section','search_miss','call','device','helpful')),
+                ('open','unique','language','section','search_miss','call',
+                 'device','helpful','reveal','directions','keepsake','print')),
   value       text not null default '',
   count       integer not null default 0,
   primary key (property_id, day, kind, value)

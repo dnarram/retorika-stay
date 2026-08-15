@@ -27,10 +27,14 @@ export default function RouteActions({
   to,
   t,
   defaultMode = "walking",
+  onGo,
 }: {
   to: { lat: number; lng: number };
   t: Dict;
   defaultMode?: Mode;
+  /* Counting which recommendations actually get used is what lets a host prune
+     a list of twenty down to the six people go to. */
+  onGo?: () => void;
 }) {
   const url = new URL("https://www.google.com/maps/dir/");
   url.searchParams.set("api", "1");
@@ -47,6 +51,7 @@ export default function RouteActions({
       href={url.toString()}
       target="_blank"
       rel="noreferrer"
+      onClick={onGo}
       className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-sm font-medium text-white"
     >
       <IconMap size={14} /> {t.actions.directions}

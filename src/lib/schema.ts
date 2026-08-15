@@ -207,6 +207,11 @@ export const staySchema = z.object({
   accessCodeOverride: z.string().max(32).nullable(),
   pin: z.string().regex(/^\d{4}$/).nullable(),
   revoked: z.boolean(),
+  /* The single most useful number a host can have, and the only one that
+     touches a named booking: did this guest ever open their guide. A date, not
+     a behaviour log — enough to send a reminder, not enough to reconstruct
+     somebody's evening. */
+  openedAt: z.string().nullable().default(null),
 });
 export type Stay = z.infer<typeof staySchema>;
 
@@ -214,7 +219,28 @@ export const stayInputSchema = staySchema.omit({ id: true, propertyId: true, slu
 
 /* Metrics aggregated per property and day. Never per guest or per device: with
    no identifiers there is no personal data to protect. */
-export const METRIC_KINDS = ["open", "language", "section", "search_miss", "call", "device", "helpful"] as const;
+/* Four questions a host actually asks about their guide, and the events that
+   answer them:
+     ¿llega?        open, unique, language, device
+     ¿sirve?        section, helpful, search_miss
+     ¿ahorra?       call, reveal, directions
+     ¿se comparte?  keepsake, print
+   Nothing here identifies anybody: every event is a counter on a property and
+   a day. */
+export const METRIC_KINDS = [
+  "open",
+  "unique",
+  "language",
+  "section",
+  "search_miss",
+  "call",
+  "device",
+  "helpful",
+  "reveal",
+  "directions",
+  "keepsake",
+  "print",
+] as const;
 export const metricKindSchema = z.enum(METRIC_KINDS);
 export type MetricKind = (typeof METRIC_KINDS)[number];
 

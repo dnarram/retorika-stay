@@ -29,10 +29,11 @@ export interface Repo {
   listStays(propertyId: string): Promise<Stay[]>;
   getStayBySlug(slug: string): Promise<Stay | null>;
   saveStay(stay: Stay): Promise<void>;
+  markStayOpened(id: string): Promise<void>;
   deleteStay(id: string): Promise<void>;
   createHost(host: Host): Promise<void>;
   track(propertyId: string, kind: MetricKind, value: string): Promise<void>;
-  metrics(propertyId: string): Promise<{ kind: MetricKind; value: string; count: number }[]>;
+  metrics(propertyId: string): Promise<{ kind: MetricKind; value: string; count: number; day?: string }[]>;
   getGuide(propertyId: string, locale: Locale): Promise<GuideRecord | null>;
   listGuides(propertyId: string): Promise<GuideRecord[]>;
   saveGuide(propertyId: string, locale: Locale, content: Guide, reviewed: boolean): Promise<void>;
@@ -113,6 +114,10 @@ const demoRepo: Repo = {
     if (index < 0) memory.stays.push(stay);
     else memory.stays[index] = stay;
   },
+  async markStayOpened(id) {
+    const stay = memory.stays.find((s) => s.id === id);
+    if (stay && !stay.openedAt) stay.openedAt = new Date().toISOString();
+  },
   async deleteStay(id) {
     memory.stays = memory.stays.filter((s) => s.id !== id);
   },
@@ -127,9 +132,10 @@ const demoRepo: Repo = {
     else memory.metrics.push({ propertyId, kind, value, count: 1 });
   },
   async metrics(propertyId) {
+    const day = new Date().toISOString().slice(0, 10);
     return memory.metrics
       .filter((m) => m.propertyId === propertyId)
-      .map(({ kind, value, count }) => ({ kind, value, count }))
+      .map(({ kind, value, count }) => ({ kind, value, count, day }))
       .sort((a, b) => b.count - a.count);
   },
   async getGuide(propertyId, locale) {
@@ -249,6 +255,7 @@ const toStay = (row: {
   access_code_override: string | null;
   pin: string | null;
   revoked: boolean;
+  opened_at: string | Date | null;
 }): Stay => ({
   id: row.id,
   propertyId: row.property_id,
@@ -259,6 +266,7 @@ const toStay = (row: {
   accessCodeOverride: row.access_code_override,
   pin: row.pin,
   revoked: row.revoked,
+  openedAt: toISOStamp(row.opened_at),
 });
 
 const pgRepo: Repo = {
@@ -351,6 +359,7 @@ const pgRepo: Repo = {
         access_code_override: string | null;
         pin: string | null;
         revoked: boolean;
+        opened_at: string | Date | null;
       }[]
     >`select * from stays where property_id = ${propertyId} order by arrival desc`;
     return rows.map(toStay);
@@ -371,6 +380,12 @@ const pgRepo: Repo = {
         guest_name = excluded.guest_name, arrival = excluded.arrival,
         departure = excluded.departure, access_code_override = excluded.access_code_override,
         pin = excluded.pin, revoked = excluded.revoked`;
+  },
+  async markStayOpened(id) {
+    /* Only the first open is recorded: the flag answers "did they ever see
+       it", and rewriting it on every visit would turn it into a log. */
+    const sql = getSql();
+    await sql`update stays set opened_at = now() where id = ${id} and opened_at is null`;
   },
   async deleteStay(id) {
     const sql = getSql();
@@ -393,11 +408,20 @@ const pgRepo: Repo = {
   },
   async metrics(propertyId) {
     const sql = getSql();
-    const rows = await sql<{ kind: MetricKind; value: string; count: string }[]>`
-      select kind, value, sum(count)::int as count from metrics
-      where property_id = ${propertyId} and day > current_date - interval '90 days'
-      group by kind, value order by count desc limit 40`;
-    return rows.map((row) => ({ kind: row.kind, value: row.value, count: Number(row.count) }));
+    /* Kept split by month rather than summed flat: the trend needs the time
+       axis, and ninety days of one property is a handful of rows. */
+    const rows = await sql<{ kind: MetricKind; value: string; count: string; day: string }[]>`
+      select kind, value, sum(count)::int as count, to_char(day, 'YYYY-MM') as day
+      from metrics
+      where property_id = ${propertyId} and day > current_date - interval '180 days'
+      group by kind, value, to_char(day, 'YYYY-MM')
+      order by count desc limit 300`;
+    return rows.map((row) => ({
+      kind: row.kind,
+      value: row.value,
+      count: Number(row.count),
+      day: row.day,
+    }));
   },
   async getGuide(propertyId, locale) {
     const sql = getSql();

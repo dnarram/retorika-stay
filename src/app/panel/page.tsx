@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { currentHostId } from "@/lib/auth";
 import { completeness } from "@/lib/completeness";
 import { getRepo } from "@/lib/repo";
+import { computeKpis, headline } from "@/lib/kpis";
 import { needsCodeRotation, stayPhase } from "@/lib/stay";
 import PanelClient, { type PropertyRow } from "@/components/PanelClient";
 
@@ -45,22 +46,7 @@ export default async function PanelPage() {
           revoked: stay.revoked,
           phase: stayPhase(stay),
         })),
-        metrics: {
-          opens,
-          languages: metrics
-            .filter((m) => m.kind === "language")
-            .map((m) => ({ value: m.value, count: m.count })),
-          helpful: metrics
-            .filter((m) => m.kind === "helpful")
-            .map((m) => ({ value: m.value, count: m.count })),
-          devices: metrics
-            .filter((m) => m.kind === "device")
-            .map((m) => ({ value: m.value, count: m.count })),
-          misses: metrics
-            .filter((m) => m.kind === "search_miss")
-            .slice(0, 5)
-            .map((m) => ({ value: m.value, count: m.count })),
-        },
+        metrics: headline(computeKpis(metrics, stays)),
       };
     }),
   );
