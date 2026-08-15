@@ -823,12 +823,29 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </a>
 
       <header className="relative bg-brand-ink px-5 pb-6 pt-6 text-white">
-        <div className="mx-auto max-w-2xl lg:max-w-6xl">
+        {/* Anchored to the header, outside the masthead composition. It used to
+            live inside it, so the centred and banded styles moved the way out
+            around with the title — navigation that relocates when the host
+            changes a palette is navigation nobody trusts. */}
+        {data.isOwner ? (
+          <a
+            href={data.backToEditor ?? "/panel"}
+            className="no-print absolute left-5 top-5 z-10 inline-flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white"
+          >
+            ← {data.backToEditor ? t.backToEditor : t.myProperties}
+          </a>
+        ) : null}
+
+        <div className={`mx-auto max-w-2xl lg:max-w-6xl ${data.isOwner ? "pt-7" : ""}`}>
           <GuideMasthead
             style={style}
             eyebrow={t.guideTitle}
             title={guide.welcomeTitle}
-            subtitle={`${property.city} · ${t.labels.host}: ${property.hostName}`}
+            subtitle={
+              property.hostName
+                ? `${property.city} · ${t.labels.host}: ${property.hostName}`
+                : property.city
+            }
             aside={
               <LanguageSwitcher
                 current={data.locale}
@@ -836,16 +853,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
                 note={t.autoTranslated}
               />
             }
-            back={
-              data.isOwner ? (
-                <a
-                  href={data.backToEditor ?? "/panel"}
-                  className="no-print mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white"
-                >
-                  ← {data.backToEditor ? t.backToEditor : t.myProperties}
-                </a>
-              ) : null
-            }
+
           />
         </div>
       </header>

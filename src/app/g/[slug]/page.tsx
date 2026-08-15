@@ -75,6 +75,13 @@ export default async function GuidePage(props: {
 
   const places = await repo.listPlaces(property.id);
 
+  /* The host's name can never be blank. The field is editable and a host can
+     empty it, but the guide always has an account behind it, so the account is
+     the floor: what the host typed wins, and their registered name catches the
+     fall. A "Host:" with nothing after it is worse than no line at all. */
+  const account = await repo.getHostById(property.hostId);
+  const hostName = property.hostName.trim() || account?.name?.trim() || "";
+
   /* ?fase= is a demo shortcut: it shows all five versions of the guide without
      waiting for a booking's real dates. */
   const demoPhase = isPhase(fase) ? (fase as StayPhase) : null;
@@ -117,7 +124,7 @@ export default async function GuidePage(props: {
       address: property.address,
       lat: property.lat,
       lng: property.lng,
-      hostName: property.hostName,
+      hostName,
       hostPhone: property.hostPhone,
       wifiSsid: property.wifiSsid,
       wifiSecurity: property.wifiSecurity,

@@ -21,7 +21,6 @@ export function GuideMasthead({
   title,
   subtitle,
   aside,
-  back,
 }: {
   style: StyleId;
   eyebrow: string;
@@ -29,14 +28,11 @@ export function GuideMasthead({
   subtitle: string;
   /* Language selector, kept out of the composition's way. */
   aside: React.ReactNode;
-  back?: React.ReactNode;
 }) {
   const centred = style === "sello";
 
   return (
     <div className={centred ? "text-center" : ""}>
-      {back}
-
       <div
         className={`flex items-start gap-3 ${centred ? "justify-center" : "justify-between"}`}
       >
