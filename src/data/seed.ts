@@ -21,6 +21,11 @@ export const HOSTS = [
     id: "host_belen",
     email: "belen@retorika.es",
     name: "Belén",
+    /* The demo account doubles as the admin so whoever reviews this can open
+       the business panel without being handed a second password. */
+    role: "admin" as const,
+    source: "directo",
+    createdAt: null,
     /* scrypt(N=16384,r=8,p=1) of "retorika2026" — see src/lib/auth.ts */
     passwordHash:
       "6707c91ddecc4e4a99eac7cf97a4c401:2dc5c162be5eedc5dbadfcf62c4e7619586ee7050c4b2707f6f4f68a5399c600",

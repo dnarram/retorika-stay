@@ -32,8 +32,28 @@ export async function POST(request: Request) {
     email,
     name: parsed.data.name,
     passwordHash: hashPassword(parsed.data.password),
+    role: "host" as const,
+    /* Bucketed at the door and never revisited. It answers "where do hosts come
+       from" without keeping a browsing history of anybody, and it is the only
+       way to report acquisition channels honestly with no analytics vendor in
+       the stack. The interesting bucket is "guia": a guest who read a welcome
+       book and came back to make their own. */
+    source: acquisitionSource(request.headers.get("referer")),
+    createdAt: null,
   };
   await repo.createHost(host);
   await createSession(host.id);
   return NextResponse.json({ ok: true });
+}
+
+function acquisitionSource(referer: string | null): string {
+  if (!referer) return "directo";
+  try {
+    const url = new URL(referer);
+    if (url.pathname.startsWith("/g/")) return "guia";
+    if (url.pathname === "/" || url.pathname.startsWith("/panel")) return "directo";
+    return url.hostname.replace(/^www\./, "");
+  } catch {
+    return "directo";
+  }
 }

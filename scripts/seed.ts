@@ -13,9 +13,11 @@ const sql = postgres(url, { ssl: requiresTls(url) ? "require" : undefined });
 
 await sql.begin(async (tx) => {
   for (const host of HOSTS) {
-    await tx`insert into hosts (id, email, name, password_hash)
-             values (${host.id}, ${host.email}, ${host.name}, ${host.passwordHash})
-             on conflict (id) do update set password_hash = excluded.password_hash`;
+    await tx`insert into hosts (id, email, name, password_hash, role, source)
+             values (${host.id}, ${host.email}, ${host.name}, ${host.passwordHash},
+                     ${host.role}, ${host.source})
+             on conflict (id) do update set password_hash = excluded.password_hash,
+               role = excluded.role`;
   }
 
   for (const p of PROPERTIES) {

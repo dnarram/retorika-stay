@@ -14,7 +14,15 @@ import type { Guide, Locale, MetricKind, Place, Property, Stay } from "./schema"
    but are lost on restart, and the UI says so.
 --------------------------------------------------------------------------- */
 
-export type Host = { id: string; email: string; name: string; passwordHash: string };
+export type Host = {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: "host" | "admin";
+  source: string;
+  createdAt: string | null;
+};
 
 export interface Repo {
   mode: "postgres" | "demo";
@@ -245,6 +253,26 @@ const COLUMN: Record<string, string> = {
   pin: "pin",
 };
 
+type HostRow = {
+  id: string;
+  email: string;
+  name: string;
+  password_hash: string;
+  role: "host" | "admin";
+  source: string;
+  created_at: string | Date | null;
+};
+
+const toHost = (row: HostRow): Host => ({
+  id: row.id,
+  email: row.email,
+  name: row.name,
+  passwordHash: row.password_hash,
+  role: row.role ?? "host",
+  source: row.source ?? "directo",
+  createdAt: toISOStamp(row.created_at),
+});
+
 const toStay = (row: {
   id: string;
   property_id: string;
@@ -273,17 +301,17 @@ const pgRepo: Repo = {
   mode: "postgres",
   async getHostByEmail(email) {
     const sql = getSql();
-    const rows = await sql<{ id: string; email: string; name: string; password_hash: string }[]>`
-      select id, email, name, password_hash from hosts where email = ${email.toLowerCase()} limit 1`;
-    const row = rows[0];
-    return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.password_hash } : null;
+    const rows = await sql<HostRow[]>`
+      select id, email, name, password_hash, role, source, created_at
+      from hosts where email = ${email.toLowerCase()} limit 1`;
+    return rows[0] ? toHost(rows[0]) : null;
   },
   async getHostById(id) {
     const sql = getSql();
-    const rows = await sql<{ id: string; email: string; name: string; password_hash: string }[]>`
-      select id, email, name, password_hash from hosts where id = ${id} limit 1`;
-    const row = rows[0];
-    return row ? { id: row.id, email: row.email, name: row.name, passwordHash: row.password_hash } : null;
+    const rows = await sql<HostRow[]>`
+      select id, email, name, password_hash, role, source, created_at
+      from hosts where id = ${id} limit 1`;
+    return rows[0] ? toHost(rows[0]) : null;
   },
   async listProperties(hostId) {
     const sql = getSql();
@@ -393,8 +421,9 @@ const pgRepo: Repo = {
   },
   async createHost(host) {
     const sql = getSql();
-    await sql`insert into hosts (id, email, name, password_hash)
-              values (${host.id}, ${host.email}, ${host.name}, ${host.passwordHash})`;
+    await sql`insert into hosts (id, email, name, password_hash, role, source)
+              values (${host.id}, ${host.email}, ${host.name}, ${host.passwordHash},
+                      ${host.role}, ${host.source})`;
   },
   async track(propertyId, kind, value) {
     /* Counter aggregated per property and day. No device or guest identifier:

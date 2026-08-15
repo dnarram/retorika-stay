@@ -39,9 +39,11 @@ const PHASE_LABEL: Record<StayPhase, string> = {
 export default function PanelClient({
   rows,
   mode,
+  isAdmin,
 }: {
   rows: PropertyRow[];
   mode: "postgres" | "demo";
+  isAdmin: boolean;
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
@@ -218,6 +220,14 @@ export default function PanelClient({
           >
             Nuevo alojamiento
           </button>
+          {isAdmin ? (
+            <Link
+              href="/admin"
+              className="rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
+            >
+              Panel de negocio
+            </Link>
+          ) : null}
           <form action="/api/auth/logout" method="post">
             <button className="rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line">Salir</button>
           </form>

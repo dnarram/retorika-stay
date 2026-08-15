@@ -14,6 +14,10 @@ create table if not exists hosts (
   email         text not null unique,
   name          text not null,
   password_hash text not null,
+  -- two roles, one column: 'host' or 'admin'
+  role          text not null default 'host' check (role in ('host','admin')),
+  -- bucketed referrer at sign-up: the only honest acquisition signal we have
+  source        text not null default 'directo',
   created_at    timestamptz not null default now()
 );
 

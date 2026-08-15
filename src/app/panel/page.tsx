@@ -14,6 +14,7 @@ export default async function PanelPage() {
 
   const repo = getRepo();
   const properties = await repo.listProperties(hostId);
+  const account = await repo.getHostById(hostId);
 
   const rows: PropertyRow[] = await Promise.all(
     properties.map(async (property) => {
@@ -51,5 +52,5 @@ export default async function PanelPage() {
     }),
   );
 
-  return <PanelClient rows={rows} mode={repo.mode} />;
+  return <PanelClient rows={rows} mode={repo.mode} isAdmin={account?.role === "admin"} />;
 }

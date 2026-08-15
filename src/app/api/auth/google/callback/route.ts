@@ -44,13 +44,17 @@ export async function GET(request: Request) {
     /* First sign-in creates the account. The password hash is random and
        unusable on purpose: this account has no password to guess, and the
        column stays NOT NULL without a special case. */
-    host = {
+    const created = {
       id: `host_${nanoid(10)}`,
       email: identity.email,
       name: identity.name,
       passwordHash: hashPassword(randomBytes(32).toString("hex")),
+      role: "host" as const,
+      source: "google",
+      createdAt: null,
     };
-    await repo.createHost(host);
+    await repo.createHost(created);
+    host = created;
   }
 
   await createSession(host.id);
