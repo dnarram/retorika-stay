@@ -11,6 +11,10 @@ import type { Locale } from "@/lib/schema";
 const es = {
   brand: "Retorika Stay",
   guideTitle: "Guía de bienvenida",
+  backToEditor: "Volver al editor",
+  skipToContent: "Ir al contenido",
+  demoHint: "La guía se reordena según el momento de la estancia. Cambia la fase para verlo:",
+  myProperties: "Mis alojamientos",
   tagline: "Todo lo de tu alojamiento, en un solo sitio",
   langLabel: "Idioma",
   sections: {
@@ -171,6 +175,10 @@ export type Dict = typeof es;
 const en: Dict = {
   brand: "Retorika Stay",
   guideTitle: "Welcome book",
+  backToEditor: "Back to the editor",
+  skipToContent: "Skip to content",
+  demoHint: "The guide reorders itself around the moment of the stay. Switch phase to see it:",
+  myProperties: "My properties",
   tagline: "Everything about your stay, in one place",
   langLabel: "Language",
   sections: {
@@ -329,6 +337,10 @@ const en: Dict = {
 const fr: Dict = {
   brand: "Retorika Stay",
   guideTitle: "Livret d'accueil",
+  backToEditor: "Retour à l'éditeur",
+  skipToContent: "Aller au contenu",
+  demoHint: "Le guide se réorganise selon le moment du séjour. Changez de phase pour le voir :",
+  myProperties: "Mes logements",
   tagline: "Tout sur votre séjour, au même endroit",
   langLabel: "Langue",
   sections: {
@@ -487,6 +499,10 @@ const fr: Dict = {
 const pt: Dict = {
   brand: "Retorika Stay",
   guideTitle: "Guia de boas-vindas",
+  backToEditor: "Voltar ao editor",
+  skipToContent: "Ir para o conteúdo",
+  demoHint: "O guia reorganiza-se consoante o momento da estadia. Mude a fase para ver:",
+  myProperties: "Os meus alojamentos",
   tagline: "Tudo sobre a sua estadia, num só lugar",
   langLabel: "Idioma",
   sections: {

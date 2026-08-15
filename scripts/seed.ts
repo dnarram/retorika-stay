@@ -21,11 +21,13 @@ await sql.begin(async (tx) => {
   for (const p of PROPERTIES) {
     await tx`insert into properties (id, host_id, slug, name, city, address, lat, lng, host_name,
               host_phone, wifi_ssid, wifi_password, wifi_security, access_code, checkin_from,
-              checkout_until, contacts, hidden_sections, theme, default_locale, published, pin)
+              checkout_until, contacts, hidden_sections, theme, visited_steps,
+              default_locale, published, pin)
              values (${p.id}, ${p.hostId}, ${p.slug}, ${p.name}, ${p.city}, ${p.address}, ${p.lat},
               ${p.lng}, ${p.hostName}, ${p.hostPhone}, ${p.wifiSsid}, ${p.wifiPassword},
               ${p.wifiSecurity}, ${p.accessCode}, ${p.checkinFrom}, ${p.checkoutUntil},
               ${tx.json(p.contacts)}, ${tx.json(p.hiddenSections)}, ${tx.json(p.theme)},
+              ${tx.json(p.visitedSteps)},
               ${p.defaultLocale},
               ${p.published}, ${p.pin})
              on conflict (id) do nothing`;

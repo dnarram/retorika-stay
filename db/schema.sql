@@ -42,6 +42,8 @@ create table if not exists properties (
   -- palette, type pairing, corner radius and header ornament
   theme          jsonb not null default
                  '{"palette":"retorika","font":"moderna","radius":"suave","style":"sereno"}'::jsonb,
+  -- steps the host has actually opened; content alone is not agreement
+  visited_steps  jsonb not null default '[]'::jsonb,
   default_locale text not null default 'es' check (default_locale in ('es','en','fr','pt')),
   published      boolean not null default false,
   pin            text check (pin ~ '^[0-9]{4}$'),

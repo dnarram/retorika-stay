@@ -6,11 +6,15 @@ import Editor from "./Editor";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditorPage(props: { params: Promise<{ id: string }> }) {
+export default async function EditorPage(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ paso?: string }>;
+}) {
   const hostId = await currentHostId();
   if (!hostId) redirect("/panel/login");
 
   const { id } = await props.params;
+  const { paso } = await props.searchParams;
   const repo = getRepo();
   const property = await repo.getProperty(id);
   if (!property || property.hostId !== hostId) notFound();
@@ -26,6 +30,7 @@ export default async function EditorPage(props: { params: Promise<{ id: string }
       initialScore={score}
       checks={checks}
       mode={repo.mode}
+      initialStep={Math.min(Math.max(Number(paso) || 1, 1), 7)}
     />
   );
 }

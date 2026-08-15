@@ -180,6 +180,7 @@ type PropertyRow = {
   contacts: Property["contacts"];
   hidden_sections: string[];
   theme: Property["theme"];
+  visited_steps: number[];
   default_locale: Locale;
   published: boolean;
   pin: string | null;
@@ -205,6 +206,7 @@ const toProperty = (row: PropertyRow): Property => ({
   accessCodeUpdatedAt: toISOStamp(row.access_code_updated_at),
   contacts: row.contacts ?? [],
   hiddenSections: row.hidden_sections ?? [],
+  visitedSteps: row.visited_steps ?? [],
   theme: row.theme ?? { palette: "retorika", font: "moderna", radius: "suave", style: "sereno" },
   defaultLocale: row.default_locale,
   published: row.published,
@@ -230,6 +232,7 @@ const COLUMN: Record<string, string> = {
   accessCodeUpdatedAt: "access_code_updated_at",
   contacts: "contacts",
   hiddenSections: "hidden_sections",
+  visitedSteps: "visited_steps",
   theme: "theme",
   defaultLocale: "default_locale",
   published: "published",
@@ -297,7 +300,10 @@ const pgRepo: Repo = {
     const assignments = entries.map(([key, value]) => {
       const column = COLUMN[key];
       const payload =
-        column === "contacts" || column === "hidden_sections" || column === "theme"
+        column === "contacts" ||
+        column === "hidden_sections" ||
+        column === "theme" ||
+        column === "visited_steps"
           ? sql.json(value as never)
           : (value as never);
       return sql`${sql(column)} = ${payload}`;
@@ -313,13 +319,15 @@ const pgRepo: Repo = {
     await sql`
       insert into properties (id, host_id, slug, name, city, address, lat, lng, host_name,
         host_phone, wifi_ssid, wifi_password, wifi_security, access_code, checkin_from,
-        checkout_until, contacts, hidden_sections, theme, default_locale, published, pin)
+        checkout_until, contacts, hidden_sections, theme, visited_steps, default_locale,
+        published, pin)
       values (${property.id}, ${property.hostId}, ${property.slug}, ${property.name},
         ${property.city}, ${property.address}, ${property.lat}, ${property.lng},
         ${property.hostName}, ${property.hostPhone}, ${property.wifiSsid},
         ${property.wifiPassword}, ${property.wifiSecurity}, ${property.accessCode},
         ${property.checkinFrom}, ${property.checkoutUntil}, ${sql.json(property.contacts as never)},
         ${sql.json(property.hiddenSections as never)}, ${sql.json(property.theme as never)},
+        ${sql.json(property.visitedSteps as never)},
         ${property.defaultLocale},
         ${property.published}, ${property.pin})`;
     return property;

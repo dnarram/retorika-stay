@@ -82,6 +82,12 @@ export const propertySchema = z.object({
      showing them. */
   hiddenSections: z.array(z.string().max(24)).max(20).default([]),
   theme: themeSchema.default(DEFAULT_THEME),
+  /* Steps the host has actually opened. Content alone is not agreement: a guide
+     arrives with starter rules and a checkout list, and ticking those off
+     before the host has ever laid eyes on them tells them their guide is ready
+     when nobody has read a word of it. A step counts as done when it holds
+     something AND somebody looked at it. */
+  visitedSteps: z.array(z.number().int().min(1).max(12)).max(12).default([]),
   defaultLocale: localeSchema,
   published: z.boolean(),
   pin: z.string().regex(/^\d{4}$/).nullable().or(z.literal("")).transform((v) => (v === "" ? null : v)),

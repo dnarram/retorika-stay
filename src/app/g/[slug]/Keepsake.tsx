@@ -1158,18 +1158,12 @@ export default function Keepsake({
       const archive = await zipStore(entries);
       const filename = `${slug}-${suffix}.zip`;
 
-      /* On a phone, sharing beats downloading: the guest can hand the images
-         straight to Instagram instead of hunting for them in Files. */
-      const file = new File([archive], filename, { type: "application/zip" });
-      if (navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: propertyName });
-          return;
-        } catch {
-          /* cancelled or unsupported in practice: fall through to download */
-        }
-      }
-
+      /* Download, always. An earlier version handed the archive straight to the
+         share sheet on phones, which sounds helpful and is not: the guest is
+         asked to publish something they have not seen yet. Download first, look
+         at it in their own gallery, share it if they like it — and that
+         sequence is the same on a phone, a tablet and a laptop, which matters
+         because we cannot reliably tell which one they are holding. */
       const url = URL.createObjectURL(archive);
       const link = document.createElement("a");
       link.href = url;

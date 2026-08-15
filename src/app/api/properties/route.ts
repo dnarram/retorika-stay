@@ -69,6 +69,7 @@ export async function POST(request: Request) {
     checkoutUntil: "11:00",
     contacts: [{ kind: "emergency", phone: "112" }],
     hiddenSections: [],
+    visitedSteps: [],
     theme: DEFAULT_THEME,
     defaultLocale: "es",
     published: false,

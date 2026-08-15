@@ -54,6 +54,7 @@ export type GuestPayload = {
   draft: boolean;
   isOwner: boolean;
   hiddenSections: string[];
+  backToEditor: string | null;
   theme: Theme;
   stay: { guestName: string | null; arrival: string; departure: string; nights: number } | null;
   autoTranslated: boolean;
@@ -818,7 +819,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
        brand colour with no conditional class names anywhere. */
     <div className="min-h-screen pb-16" style={themeVars(data.theme)}>
       <a className="skip-link" href="#contenido">
-        Ir al contenido
+        {t.skipToContent}
       </a>
 
       <header className="relative bg-brand-ink px-5 pb-6 pt-6 text-white">
@@ -838,10 +839,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             back={
               data.isOwner ? (
                 <a
-                  href="/panel"
+                  href={data.backToEditor ?? "/panel"}
                   className="no-print mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white"
                 >
-                  ← Mis alojamientos
+                  ← {data.backToEditor ? t.backToEditor : t.myProperties}
                 </a>
               ) : null
             }
@@ -1282,9 +1283,7 @@ function PhasePreview({ phase, locale }: { phase: StayPhase; locale: Locale }) {
       <p className="text-xs font-semibold uppercase tracking-wide text-brand-ink">
         {t.labels.demo}
       </p>
-      <p className="mt-1 text-sm text-muted">
-        La guía se reordena según el momento de la estancia. Cambia la fase para verlo:
-      </p>
+      <p className="mt-1 text-sm text-muted">{t.demoHint}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {phases.map((p) => (
           <a

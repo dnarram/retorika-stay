@@ -15,14 +15,14 @@ import PinGate from "./PinGate";
    real home. The X-Robots-Tag is also set in next.config.ts. */
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-type Search = { lang?: string; fase?: string };
+type Search = { lang?: string; fase?: string; editor?: string; paso?: string };
 
 export default async function GuidePage(props: {
   params: Promise<{ slug: string }>;
   searchParams: Promise<Search>;
 }) {
   const { slug } = await props.params;
-  const { lang, fase } = await props.searchParams;
+  const { lang, fase, editor, paso } = await props.searchParams;
   const repo = getRepo();
 
   /* One link format, two very different audiences:
@@ -95,6 +95,12 @@ export default async function GuidePage(props: {
        guest must never learn there is a dashboard behind this page. */
     isOwner,
     hiddenSections: property.hiddenSections,
+    /* Set only when the host arrived from their own editor: previewing is a
+       look, and the way out should be the way back. */
+    backToEditor:
+      isOwner && editor === property.id
+        ? `/panel/${property.id}?paso=${Math.min(Math.max(Number(paso) || 1, 1), 7)}`
+        : null,
     theme: property.theme,
     stay: stay
       ? {

@@ -115,6 +115,7 @@ export default function Editor({
   places: initialPlaces,
   checks,
   mode,
+  initialStep,
 }: {
   property: Property;
   guides: GuideRecord[];
@@ -122,6 +123,7 @@ export default function Editor({
   initialScore: number;
   checks: Check[];
   mode: "postgres" | "demo";
+  initialStep: number;
 }) {
   const [property, setProperty] = useState(initialProperty);
   const [guides, setGuides] = useState(initialGuides);
@@ -135,7 +137,7 @@ export default function Editor({
   const [erNearby, setErNearby] = useState<NearbyPlace[] | null>(null);
   const [erStatus, setErStatus] = useState<string | null>(null);
   const [locale, setLocale] = useState<Locale>(initialProperty.defaultLocale);
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(initialStep);
   const [saveState, setSave] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -205,6 +207,7 @@ export default function Editor({
                 pin: nextProperty.pin,
                 hiddenSections: nextProperty.hiddenSections,
                 theme: nextProperty.theme,
+                visitedSteps: nextProperty.visitedSteps,
               }),
             }),
           ];
@@ -256,6 +259,12 @@ export default function Editor({
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
+  /* The step the editor opens on counts as visited too. */
+  useEffect(() => {
+    markVisited(step);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* Resolve the country once on load, so the emergency suggestions are there
      before the host reaches step 6 without them having to touch the map. */
   useEffect(() => {
@@ -277,6 +286,14 @@ export default function Editor({
   const goToStep = async (next: number) => {
     await saveNow();
     setStep(next);
+    markVisited(next);
+  };
+
+  /* Opening a step is what turns its starter content into content the host has
+     agreed to. Recorded the moment they arrive, not when they type. */
+  const markVisited = (which: number) => {
+    if (property.visitedSteps.includes(which)) return;
+    patchProperty({ visitedSteps: [...property.visitedSteps, which] });
   };
 
   const patchProperty = (patch: Partial<Property>) => {
@@ -1238,76 +1255,6 @@ export default function Editor({
                 </div>
               </Panel>
 
-              <Panel title="Preguntas frecuentes">
-                <p className="text-sm text-muted">
-                  Escribe la pregunta que ya te han hecho tres veces por WhatsApp. Cada una que
-                  respondas aquí es un mensaje menos a medianoche.
-                </p>
-                <ul className="mt-3 space-y-3">
-                  {(guide?.content.faqs ?? []).map((faq, index) => (
-                    <li key={index} className="rounded-xl border border-line p-3">
-                      <input
-                        value={faq.q}
-                        placeholder="Escribe la pregunta"
-                        onChange={(event) => {
-                          const faqs = [...(guide?.content.faqs ?? [])];
-                          faqs[index] = { ...faq, q: event.target.value };
-                          patchGuide({ faqs });
-                        }}
-                        className="w-full rounded-lg border border-line px-3 py-2 font-medium outline-none focus:border-brand"
-                      />
-                      <textarea
-                        value={faq.a}
-                        rows={2}
-                        placeholder="Respuesta"
-                        onChange={(event) => {
-                          const faqs = [...(guide?.content.faqs ?? [])];
-                          faqs[index] = { ...faq, a: event.target.value };
-                          patchGuide({ faqs });
-                        }}
-                        className="mt-2 w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          patchGuide({ faqs: (guide?.content.faqs ?? []).filter((_, i) => i !== index) })
-                        }
-                        className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted hover:text-alert-ink"
-                      >
-                        <IconTrash size={16} /> Eliminar
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => patchGuide({ faqs: [...(guide?.content.faqs ?? []), { q: "", a: "" }] })}
-                    className="rounded-full px-4 py-2 text-sm font-medium ring-1 ring-line"
-                  >
-                    Añadir pregunta
-                  </button>
-                  {FAQ_TEMPLATES.filter(
-                    (template) => !(guide?.content.faqs ?? []).some((faq) => faq.q === template.q),
-                  )
-                    .slice(0, 8)
-                    .map((template) => (
-                      <button
-                        key={template.q}
-                        type="button"
-                        onClick={() =>
-                          patchGuide({
-                            faqs: [...(guide?.content.faqs ?? []), { q: template.q, a: "" }],
-                          })
-                        }
-                        className="rounded-full px-3 py-2 text-xs font-medium text-brand-deep ring-1 ring-brand-line"
-                      >
-                        + {template.q}
-                      </button>
-                    ))}
-                </div>
-              </Panel>
-
               <Panel title="Qué se muestra en la guía">
                 <p className="text-sm text-muted">
                   Desmarca lo que no quieras enseñar. Apagar una sección no borra nada: el contenido
@@ -1395,7 +1342,7 @@ export default function Editor({
             </>
           ) : null}
 
-          <div className="flex justify-between pt-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
             <button
               type="button"
               onClick={() => void goToStep(Math.max(1, step - 1))}
@@ -1404,6 +1351,18 @@ export default function Editor({
             >
               Anterior
             </button>
+            {/* Autosave already runs, but a host who is about to close the tab
+                wants to press something. The button is not redundant: it is the
+                reassurance that makes the autosave believable. */}
+            <button
+              type="button"
+              onClick={() => void saveNow()}
+              disabled={saveState === "saving"}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-brand-line disabled:opacity-40"
+            >
+              {saveState === "saving" ? "Guardando…" : saveState === "saved" ? "Guardado" : "Guardar"}
+            </button>
+
             <button
               type="button"
               onClick={() => void goToStep(Math.min(STEPS.length, step + 1))}
@@ -1450,8 +1409,10 @@ export default function Editor({
             onChange={(patch) => patchProperty({ theme: { ...property.theme, ...patch } })}
           />
 
+          {/* The step travels with the link so the way back lands exactly where
+              the host left off. Previewing is a look, not a departure. */}
           <Link
-            href={`/g/${property.slug}`}
+            href={`/g/${property.slug}?editor=${property.id}&paso=${step}`}
             className="block rounded-card border border-line bg-white p-4 text-sm font-medium text-brand-deep hover:border-brand"
           >
             Ver la guía como huésped →
