@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { currentHostId } from "@/lib/auth";
 import { getRepo } from "@/lib/repo";
 import { trackSchema } from "@/lib/schema";
 
@@ -50,6 +51,28 @@ export async function POST(request: Request) {
   const stay = await repo.getStayBySlug(slug);
   const property = stay ? await repo.getProperty(stay.propertyId) : await repo.getPropertyBySlug(slug);
   if (!property) return NextResponse.json({ ok: false }, { status: 404 });
+
+  /* THE OWNER DOES NOT COUNT.
+
+     A host opening their own guide is checking their work, not using it, and
+     every one of those visits was quietly inflating their own dashboard —
+     "vista de muestra", "ver la guía como huésped" and every preview from the
+     editor landed in the same counters as a real guest.
+
+     The check is deliberately narrow: it excludes the owner OF THIS PROPERTY,
+     not anyone who happens to have an account. Someone who hosts a flat in
+     Ronda and stays in one in Madrid is a guest in Madrid, and their reading
+     counts there exactly as anybody else's would.
+
+     And it lives on the server, not in the browser: the beacon carries the
+     session cookie, so ownership is established from the session rather than
+     from something the page could claim about itself. */
+  const viewerId = await currentHostId();
+  if (viewerId && viewerId === property.hostId) {
+    /* Accepted and dropped. The guest-side code never learns whether an event
+       was counted, which is also why no attacker learns anything here. */
+    return new NextResponse(null, { status: 204 });
+  }
 
   await repo.track(property.id, kind, value.slice(0, 60));
 

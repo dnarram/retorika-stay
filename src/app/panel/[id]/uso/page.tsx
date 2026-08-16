@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { IconAlert, IconArrow, IconCheck, IconInfo } from "@/components/icons";
 import { currentHostId } from "@/lib/auth";
-import { computeKpis } from "@/lib/kpis";
+import { computeKpis, sectionName } from "@/lib/kpis";
 import { getRepo } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
@@ -125,7 +125,7 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
         {usefulness.sections.length > 0 ? (
           <Row
             label="Secciones más abiertas"
-            text={usefulness.sections.map((s) => `${s.value} (${s.count})`).join(" · ")}
+            text={usefulness.sections.map((s) => `${sectionName(s.value)} (${s.count})`).join(" · ")}
             hint="Nadie lee una guía entera. Esto es lo que de verdad necesitan."
           />
         ) : null}
@@ -148,19 +148,40 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
           </div>
         ) : null}
 
-        <Row
-          label="¿Les sirvió?"
-          text={
-            usefulness.helpfulYes === 0 && usefulness.helpfulNo.length === 0
-              ? "Sin respuestas todavía"
-              : `${usefulness.helpfulYes} sí · ${
-                  usefulness.helpfulNo.length > 0
-                    ? usefulness.helpfulNo.map((h) => `${h.section} (${h.count})`).join(", ")
-                    : "ningún no"
-                }`
-          }
-          hint="Un «no» señala la sección exacta que hay que reescribir."
-        />
+        <div className="mt-4 grid gap-3 border-t border-line pt-3 sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              La guía entera
+            </p>
+            <p className="mt-1 text-sm">
+              {usefulness.guideYes === 0 && usefulness.guideNo === 0
+                ? "Sin respuestas todavía"
+                : `${usefulness.guideYes} sí · ${usefulness.guideNo} no`}
+            </p>
+            <p className="mt-0.5 text-xs text-muted">
+              Se pregunta una sola vez, al final, y solo a quien lee en modo continuo.
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Sección por sección
+            </p>
+            <p className="mt-1 text-sm">
+              {usefulness.sectionYes === 0 && usefulness.sectionNo.length === 0
+                ? "Sin respuestas todavía"
+                : `${usefulness.sectionYes} sí · ${
+                    usefulness.sectionNo.length > 0
+                      ? usefulness.sectionNo
+                          .map((h) => `${sectionName(h.section)} (${h.count})`)
+                          .join(", ")
+                      : "ningún no"
+                  }`}
+            </p>
+            <p className="mt-0.5 text-xs text-muted">
+              Un «no» señala la sección exacta que hay que reescribir.
+            </p>
+          </div>
+        </div>
       </Block>
 
       {/* 3 ------------------------------------------------------------ */}
@@ -178,7 +199,7 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
         <Figures
           items={[
             { value: String(workSaved.calls), label: "llamadas desde la guía" },
-            { value: String(workSaved.reveals), label: "veces que miraron el código" },
+            { value: String(workSaved.reveals), label: "veces que consultaron el código de entrada" },
             {
               value: frictionDelta > 0 ? `−${frictionDelta}` : frictionDelta < 0 ? `+${-frictionDelta}` : "=",
               label: "fricciones frente al mes pasado",
@@ -195,7 +216,7 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
           <Row
             label="Recomendaciones que usan"
             text={workSaved.directions.map((d) => `${d.value} (${d.count})`).join(" · ")}
-            hint="Las que nadie pulsa sobran: una lista corta y buena vale más que una larga."
+            hint="Veces que pulsaron «Cómo llegar» en cada sitio. Las que nadie pulsa sobran: una lista corta y buena vale más que una larga."
           />
         ) : null}
       </Block>
@@ -213,21 +234,29 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
         <Figures
           items={[
             { value: String(sharing.keepsakes), label: "recuerdos descargados" },
-            { value: String(sharing.prints), label: "guías impresas" },
+            { value: String(sharing.prints), label: "veces que pulsaron imprimir" },
           ]}
         />
         <p className="mt-3 text-xs text-muted">
-          No sabemos si acaban publicándolos: la guía no espía a nadie fuera de sí misma. Una
-          descarga es la única señal honesta que tenemos.
+          «Pulsaron imprimir» es literalmente eso: cuántas veces alguien abrió el diálogo de
+          impresión de su navegador desde la guía. No sabemos si llegó a salir en papel, ni si
+          acaban publicando el recuerdo: la guía no mira nada fuera de sí misma.
         </p>
       </Block>
 
       <footer className="mt-10 rounded-card border border-line bg-white p-4 text-xs text-muted">
         <p className="flex items-start gap-2">
           <IconCheck size={15} />
-          Todos estos números son un suelo, no un total: la guía funciona sin conexión y un huésped
-          que la lee en el avión no cuenta. Nada se guarda por persona salvo si una reserva abrió su
-          guía, y de eso solo la fecha.
+          <span className="block">
+            <strong>Tus propias visitas no cuentan.</strong> Cuando abres tu guía desde «Vista de
+            muestra», «Ver la guía como huésped» o el editor, nada de eso llega a estos números.
+            Aquí solo hay huéspedes.
+          </span>
+          <span className="mt-2 block">
+            Todos estos números son un suelo, no un total: la guía funciona sin conexión y quien la
+            lee en el avión no cuenta. Los datos abarcan los últimos seis meses. Nada se guarda por
+            persona salvo si una reserva abrió su guía, y de eso solo la fecha.
+          </span>
         </p>
       </footer>
     </main>

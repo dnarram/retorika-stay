@@ -36,8 +36,16 @@ export type Kpis = {
   };
   usefulness: {
     sections: { value: string; count: number }[];
-    helpfulYes: number;
-    helpfulNo: { section: string; count: number }[];
+    /* Section ratings and the rating of the guide as a whole were being added
+       together, which made both meaningless: "12 sí" could be twelve people
+       liking the wifi section or twelve people liking the guide, and the
+       whole-guide "no" — the most serious signal in the product — was buried
+       among section noise. They are two different questions and are now two
+       different numbers. */
+    sectionYes: number;
+    sectionNo: { section: string; count: number }[];
+    guideYes: number;
+    guideNo: number;
     misses: { value: string; count: number }[];
   };
   workSaved: {
@@ -55,6 +63,24 @@ export type Kpis = {
     prints: number;
   };
 };
+
+/* The panel was printing our internal ids at the host: "rules (2)", "wifi (5)".
+   A host has never seen those words and should not have to learn them. */
+export const SECTION_LABEL: Record<string, string> = {
+  arrival: "Cómo llegar",
+  entry: "Entrada",
+  wifi: "WiFi",
+  house: "La casa",
+  rules: "Normas",
+  places: "Recomendaciones",
+  transport: "Moverte",
+  emergency: "Emergencias",
+  checkout: "Salida",
+  faq: "Preguntas",
+  guide: "La guía entera",
+};
+
+export const sectionName = (id: string): string => SECTION_LABEL[id] ?? id;
 
 const sum = (rows: MetricRow[]) => rows.reduce((total, row) => total + row.count, 0);
 const byKind = (rows: MetricRow[], kind: MetricKind) => rows.filter((row) => row.kind === kind);
@@ -110,14 +136,22 @@ export function computeKpis(rows: MetricRow[], stays: Stay[], now = new Date()):
     },
     usefulness: {
       sections: ranked(rows, "section", 6),
-      helpfulYes: byKind(rows, "helpful")
-        .filter((row) => row.value.endsWith(":si"))
+      sectionYes: byKind(rows, "helpful")
+        .filter((row) => row.value.endsWith(":si") && !row.value.startsWith("guide:"))
         .reduce((total, row) => total + row.count, 0),
-      helpfulNo: ranked(
-        byKind(rows, "helpful").filter((row) => row.value.endsWith(":no")),
+      sectionNo: ranked(
+        byKind(rows, "helpful").filter(
+          (row) => row.value.endsWith(":no") && !row.value.startsWith("guide:"),
+        ),
         "helpful",
         5,
       ).map((row) => ({ section: row.value.split(":")[0], count: row.count })),
+      guideYes: byKind(rows, "helpful")
+        .filter((row) => row.value === "guide:si")
+        .reduce((total, row) => total + row.count, 0),
+      guideNo: byKind(rows, "helpful")
+        .filter((row) => row.value === "guide:no")
+        .reduce((total, row) => total + row.count, 0),
       misses: ranked(rows, "search_miss", 6),
     },
     workSaved: {
@@ -148,7 +182,8 @@ export function headline(kpis: Kpis): {
     /* Everything worth a host's attention this week, counted once. */
     attention:
       kpis.usefulness.misses.length +
-      kpis.usefulness.helpfulNo.length +
+      kpis.usefulness.sectionNo.length +
+      (kpis.usefulness.guideNo > 0 ? 1 : 0) +
       kpis.reach.silentBookings.length,
   };
 }

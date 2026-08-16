@@ -457,6 +457,9 @@ export default function PanelClient({
                   ver detalle
                 </Link>
               </div>
+              <p className="mt-1 text-[11px] text-muted">
+                Solo huéspedes: tus propias visitas no cuentan.
+              </p>
               <dl className="mt-2 grid grid-cols-3 gap-2 text-center">
                 <div>
                   <dt className="font-display text-xl font-semibold text-brand-deep">
