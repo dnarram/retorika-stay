@@ -87,11 +87,21 @@ export default async function GuidePage(props: {
   const demoPhase = isPhase(fase) ? (fase as StayPhase) : null;
 
   const phase: StayPhase = demoPhase ?? (stay ? stayPhase(stay) : "staying");
-  const reveal = stay
-    ? demoPhase
-      ? demoPhase !== "before" && demoPhase !== "memories"
-      : canRevealAccess(stay)
-    : false;
+
+  /* SECURITY: ?fase= may narrow what is shown and must never widen it.
+
+     The first version let the parameter decide on its own, which meant anybody
+     holding the link to a finished booking could append ?fase=staying and get
+     the door code back — defeating the single feature this product is built
+     around. The rule now is monotonic: the real dates decide whether the code
+     may be served at all, and the demo parameter can only take that away.
+
+     Which keeps the review script working (an active booking with
+     ?fase=memories still hides the code) and closes the hole (a finished
+     booking with ?fase=staying stays closed). */
+  const withinWindow = stay ? canRevealAccess(stay) : false;
+  const demoAllows = demoPhase ? demoPhase !== "before" && demoPhase !== "memories" : true;
+  const reveal = withinWindow && demoAllows;
 
   const origin = { lat: property.lat, lng: property.lng };
 

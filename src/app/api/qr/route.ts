@@ -15,8 +15,26 @@ export async function GET(request: Request) {
   /* A QR encoding "/g/abc123" is useless: a phone camera reads it as plain text,
      not as a link. Callers pass a path because a plain <a download> has no way
      to know the origin, so the absolute URL is built here, once, for every call
-     site at the same time. */
-  const payload = data.startsWith("/") ? new URL(data, request.url).toString() : data;
+     site at the same time.
+
+     SECURITY: only two shapes are accepted — a path on this site, or a WIFI:
+     payload. Left open, this route was a free QR generator on someone else's
+     domain: a phishing link printed on a code that appears to come from
+     Retorika. Nothing in the product needs to encode an arbitrary URL. */
+  const origin = new URL(request.url).origin;
+  let payload: string;
+  if (data.startsWith("/")) {
+    payload = new URL(data, origin).toString();
+  } else if (data.startsWith("WIFI:")) {
+    payload = data;
+  } else if (data.startsWith(origin)) {
+    payload = data;
+  } else {
+    return NextResponse.json(
+      { error: "Solo se admiten rutas de este sitio o credenciales WiFi" },
+      { status: 400 },
+    );
+  }
 
   const svg = await QRCode.toString(payload, {
     type: "svg",
