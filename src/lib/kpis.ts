@@ -44,6 +44,9 @@ export type Kpis = {
        different numbers. */
     sectionYes: number;
     sectionNo: { section: string; count: number }[];
+    /* The total was missing, and without it the panel could only print the
+       breakdown — which read as a continuation of the "sí" figure. */
+    sectionNoTotal: number;
     guideYes: number;
     guideNo: number;
     misses: { value: string; count: number }[];
@@ -146,6 +149,9 @@ export function computeKpis(rows: MetricRow[], stays: Stay[], now = new Date()):
         "helpful",
         5,
       ).map((row) => ({ section: row.value.split(":")[0], count: row.count })),
+      sectionNoTotal: byKind(rows, "helpful")
+        .filter((row) => row.value.endsWith(":no") && !row.value.startsWith("guide:"))
+        .reduce((total, row) => total + row.count, 0),
       guideYes: byKind(rows, "helpful")
         .filter((row) => row.value === "guide:si")
         .reduce((total, row) => total + row.count, 0),

@@ -154,9 +154,15 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
               La guía entera
             </p>
             <p className="mt-1 text-sm">
-              {usefulness.guideYes === 0 && usefulness.guideNo === 0
-                ? "Sin respuestas todavía"
-                : `${usefulness.guideYes} sí · ${usefulness.guideNo} no`}
+              {usefulness.guideYes === 0 && usefulness.guideNo === 0 ? (
+                "Sin respuestas todavía"
+              ) : (
+                <>
+                  <span className="font-medium text-ok-ink">{usefulness.guideYes} sí</span>
+                  <span className="text-muted"> · </span>
+                  <span className="font-medium text-alert-ink">{usefulness.guideNo} no</span>
+                </>
+              )}
             </p>
             <p className="mt-0.5 text-xs text-muted">
               Se pregunta una sola vez, al final, y solo a quien lee en modo continuo.
@@ -166,17 +172,34 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">
               Sección por sección
             </p>
+            {/* Two numbers first, the breakdown underneath and labelled.
+
+                The previous version printed "4 sí · Normas (2), Entrada (1)",
+                where the list was the noes and nothing said so — so it read as
+                four positives followed by more positives. The count was always
+                right; the sentence was the bug, which is the worst kind in a
+                dashboard because it looks like data. */}
             <p className="mt-1 text-sm">
-              {usefulness.sectionYes === 0 && usefulness.sectionNo.length === 0
-                ? "Sin respuestas todavía"
-                : `${usefulness.sectionYes} sí · ${
-                    usefulness.sectionNo.length > 0
-                      ? usefulness.sectionNo
-                          .map((h) => `${sectionName(h.section)} (${h.count})`)
-                          .join(", ")
-                      : "ningún no"
-                  }`}
+              {usefulness.sectionYes === 0 && usefulness.sectionNoTotal === 0 ? (
+                "Sin respuestas todavía"
+              ) : (
+                <>
+                  <span className="font-medium text-ok-ink">{usefulness.sectionYes} sí</span>
+                  <span className="text-muted"> · </span>
+                  <span className="font-medium text-alert-ink">
+                    {usefulness.sectionNoTotal} no
+                  </span>
+                </>
+              )}
             </p>
+            {usefulness.sectionNo.length > 0 ? (
+              <p className="mt-1 text-sm text-alert-ink">
+                Dicen que no:{" "}
+                {usefulness.sectionNo
+                  .map((h) => `${sectionName(h.section)} (${h.count})`)
+                  .join(" · ")}
+              </p>
+            ) : null}
             <p className="mt-0.5 text-xs text-muted">
               Un «no» señala la sección exacta que hay que reescribir.
             </p>
