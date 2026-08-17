@@ -30,7 +30,71 @@ const bodySchema = z.object({
   force: z.boolean().default(false),
 });
 
-const ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+/* Overridable so the whole translation path can be exercised against a local
+   stub. Without this the only way to test it is to call a paid provider from a
+   machine with internet, which is why this bug survived two rounds of "it
+   compiles". */
+const ENDPOINT =
+  process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1/chat/completions";
+
+/* Every call to the provider goes through here.
+
+   The route used to call fetch bare. When the provider was unreachable, rate
+   limited or slow — all three are routine on a free tier — the exception
+   escaped, the route answered with an empty 500, and the publish loop ignored
+   it. From the host's chair the guide simply stayed in Spanish with no error
+   anywhere: the failure was invisible, which is why this took three rounds to
+   find. Now every failure has a sentence attached to it. */
+async function ask(
+  system: string,
+  user: string,
+): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
+  try {
+    const response = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+      /* Four languages in sequence must fit inside the platform's limit. */
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      return {
+        ok: false,
+        error:
+          response.status === 429
+            ? "El traductor está saturado ahora mismo (límite de uso). Inténtalo en un minuto."
+            : `El traductor respondió ${response.status}. ${detail.slice(0, 120)}`,
+      };
+    }
+
+    const raw = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+    const content = raw.choices?.[0]?.message?.content;
+    if (!content) return { ok: false, error: "El traductor devolvió una respuesta vacía." };
+    return { ok: true, content };
+  } catch (error) {
+    const name = (error as Error).name;
+    return {
+      ok: false,
+      error:
+        name === "TimeoutError"
+          ? "El traductor tardó demasiado en responder."
+          : "No se pudo contactar con el traductor.",
+    };
+  }
+}
 
 const placeNotesSchema = z.object({
   items: z
@@ -77,56 +141,39 @@ export async function POST(request: Request) {
   const existing = await repo.getGuide(propertyId, to);
   const needsGuide = force || !existing;
 
+  let guideResult: "creada" | "ya estaba" = "ya estaba";
+
   if (needsGuide) {
-  const system = [
-    "Eres traductor profesional de contenido turístico.",
-    `Traduce del ${LOCALE_NAMES[from]} al ${LOCALE_NAMES[to]}.`,
-    "Devuelve EXCLUSIVAMENTE un objeto JSON con exactamente las mismas claves y la misma estructura que recibas.",
-    "No añadas, no resumas y no inventes información que no esté en el original.",
-    "Mantén sin traducir: nombres propios, calles, marcas, redes WiFi y números.",
-    "Adapta las horas y los formatos al uso del idioma de destino, sin cambiar el valor.",
-    "El tono es el de un anfitrión que habla de tú a su huésped: directo y práctico.",
-  ].join(" ");
+    const system = [
+      "Eres traductor profesional de contenido turístico.",
+      `Traduce del ${LOCALE_NAMES[from]} al ${LOCALE_NAMES[to]}.`,
+      "Devuelve EXCLUSIVAMENTE un objeto JSON con exactamente las mismas claves y la misma estructura que recibas.",
+      "No añadas, no resumas y no inventes información que no esté en el original.",
+      "Mantén sin traducir: nombres propios, calles, marcas, redes WiFi y números.",
+      "Adapta las horas y los formatos al uso del idioma de destino, sin cambiar el valor.",
+    ].join(" ");
 
-  const response = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: JSON.stringify(source.content) },
-      ],
-    }),
-  });
+    const answer = await ask(system, JSON.stringify(source.content));
+    if (!answer.ok) return NextResponse.json({ error: answer.error }, { status: 502 });
 
-  if (!response.ok) {
-    return NextResponse.json(
-      { error: `El servicio de traducción respondió ${response.status}` },
-      { status: 502 },
-    );
-  }
-
-  const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-  const raw = payload.choices?.[0]?.message?.content;
-  if (!raw) return NextResponse.json({ error: "Respuesta vacía" }, { status: 502 });
-
-  const candidate = guideSchema.safeParse(JSON.parse(raw));
-  if (!candidate.success) {
-    /* If the model strays from the schema nothing is saved: a clear error beats
-       a half-translated guide in someone's home. */
-    return NextResponse.json(
-      { error: "La traducción no respeta la estructura de la guía", detail: candidate.error.flatten() },
-      { status: 422 },
-    );
-  }
+    let candidate;
+    try {
+      candidate = guideSchema.safeParse(JSON.parse(answer.content));
+    } catch {
+      return NextResponse.json(
+        { error: "El traductor devolvió algo que no es JSON válido." },
+        { status: 502 },
+      );
+    }
+    if (!candidate.success) {
+      return NextResponse.json(
+        { error: "La traducción no encaja con la estructura de la guía." },
+        { status: 502 },
+      );
+    }
 
     await repo.saveGuide(propertyId, to, candidate.data, false);
+    guideResult = "creada";
   }
 
   /* The recommendations travel too.
@@ -143,60 +190,63 @@ export async function POST(request: Request) {
     return (note?.tagline?.trim() || note?.note?.trim()) && !place.notes[to]?.note?.trim();
   });
 
+  let translatedNotes = 0;
+  let noteWarning: string | null = null;
+
   if (pending.length > 0) {
-    const payloadIn = pending.map((place) => ({
-      id: place.id,
-      tagline: place.notes[from]?.tagline ?? "",
-      note: place.notes[from]?.note ?? "",
-    }));
-
-    const placesResponse = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: [
-              `Traduce del ${LOCALE_NAMES[from]} al ${LOCALE_NAMES[to]}.`,
-              'Recibes {"items":[{"id","tagline","note"}]} y devuelves EXACTAMENTE la misma estructura.',
-              "No traduzcas nombres propios de locales, calles ni platos típicos: si un plato o un sitio se llama de una forma, esa forma se conserva y, si hace falta, se explica entre paréntesis.",
-              "No inventes nada. Mantén el tono de un anfitrión hablando a su huésped.",
-            ].join(" "),
-          },
-          { role: "user", content: JSON.stringify({ items: payloadIn }) },
-        ],
+    const answer = await ask(
+      [
+        `Traduce del ${LOCALE_NAMES[from]} al ${LOCALE_NAMES[to]}.`,
+        'Recibes {"items":[{"id","tagline","note"}]} y devuelves EXACTAMENTE la misma estructura.',
+        "No traduzcas nombres propios de locales, calles ni platos típicos: si un plato o un sitio se llama de una forma, esa forma se conserva y, si hace falta, se explica entre paréntesis.",
+        "No inventes nada. Mantén el tono de un anfitrión hablando a su huésped.",
+      ].join(" "),
+      JSON.stringify({
+        items: pending.map((place) => ({
+          id: place.id,
+          tagline: place.notes[from]?.tagline ?? "",
+          note: place.notes[from]?.note ?? "",
+        })),
       }),
-    });
+    );
 
-    if (placesResponse.ok) {
-      const raw = (await placesResponse.json()) as {
-        choices?: { message?: { content?: string } }[];
-      };
-      const parsedPlaces = placeNotesSchema.safeParse(
-        JSON.parse(raw.choices?.[0]?.message?.content ?? "{}"),
-      );
+    if (!answer.ok) {
+      /* The guide is already translated at this point, so this is a warning
+         rather than a failure: the host is told exactly what is missing instead
+         of being told nothing, which is what happened before. */
+      noteWarning = answer.error;
+    } else {
+      let parsedPlaces;
+      try {
+        parsedPlaces = placeNotesSchema.safeParse(JSON.parse(answer.content));
+      } catch {
+        parsedPlaces = { success: false } as const;
+      }
       if (parsedPlaces.success) {
         for (const item of parsedPlaces.data.items) {
-          const place = places.find((candidatePlace) => candidatePlace.id === item.id);
+          const place = places.find((candidate) => candidate.id === item.id);
           if (!place) continue;
           await repo.savePlace({
             ...place,
             notes: { ...place.notes, [to]: { tagline: item.tagline, note: item.note } },
           });
+          translatedNotes += 1;
         }
+      } else {
+        noteWarning = "El traductor devolvió las notas en un formato inesperado.";
       }
     }
-    /* A failure here leaves the guide translated and the notes in the original
-       language, which is exactly what happened before and is still readable.
-       It is not worth failing the whole publish over. */
   }
 
-  return NextResponse.json({ ok: true, locale: to, reviewed: false, locales: LOCALES });
+  /* The answer says what actually happened, so "no funcionó" can never again
+     mean "something, somewhere, silently". */
+  return NextResponse.json({
+    ok: true,
+    locale: to,
+    guide: guideResult,
+    notes: translatedNotes,
+    pending: pending.length,
+    warning: noteWarning,
+    locales: LOCALES,
+  });
 }

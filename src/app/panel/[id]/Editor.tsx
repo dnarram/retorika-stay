@@ -329,23 +329,34 @@ export default function Editor({
     setTranslating(true);
     setMessage(null);
     const targets = LOCALES.filter((code) => code !== property.defaultLocale);
-    let done = 0;
+    const report: string[] = [];
+
     for (const locale of targets) {
       const response = await fetch("/api/translate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ propertyId: property.id, from: property.defaultLocale, to: locale }),
       });
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; notes?: number; pending?: number; warning?: string | null }
+        | null;
+
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setMessage(payload?.error ?? "No se pudieron actualizar las traducciones.");
+        setMessage(`${LOCALE_NAMES[locale]}: ${payload?.error ?? "no se pudo traducir."}`);
         setTranslating(false);
         return;
       }
-      done += 1;
+      /* Per language and per note. "Listo" told the host nothing and was true
+         even when nothing had been translated. */
+      report.push(
+        payload?.warning
+          ? `${LOCALE_NAMES[locale]}: ${payload.warning}`
+          : `${LOCALE_NAMES[locale]}: ${payload?.notes ?? 0} notas`,
+      );
     }
+
     setTranslating(false);
-    setMessage(`Listo: ${done} idiomas al día.`);
+    setMessage(report.join(" · "));
   }
 
   async function savePlace(place: Place) {
