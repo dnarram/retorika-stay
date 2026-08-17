@@ -80,7 +80,10 @@ export default async function GuidePage(props: {
      the floor: what the host typed wins, and their registered name catches the
      fall. A "Host:" with nothing after it is worse than no line at all. */
   const account = await repo.getHostById(property.hostId);
-  const hostName = property.hostName.trim() || account?.name?.trim() || "";
+  /* People register as "belen montes" at two in the morning and their name then
+     appears that way to every guest. Capitalising on display fixes it for the
+     guides already out there without touching what they typed. */
+  const hostName = titleCase(property.hostName.trim() || account?.name?.trim() || "");
 
   /* ?fase= is a demo shortcut: it shows all five versions of the guide without
      waiting for a booking's real dates. */
@@ -101,7 +104,15 @@ export default async function GuidePage(props: {
      booking with ?fase=staying stays closed). */
   const withinWindow = stay ? canRevealAccess(stay) : false;
   const demoAllows = demoPhase ? demoPhase !== "before" && demoPhase !== "memories" : true;
-  const reveal = withinWindow && demoAllows;
+
+  /* The owner sees everything, always.
+
+     Hiding the door code from the person who typed it made no sense: they are
+     checking that their own guide reads correctly, and half of what they came
+     to check was blanked out. The rule protects guests from each other, not a
+     host from themselves — and `isOwner` comes from the session, so it cannot
+     be claimed by anybody else. */
+  const reveal = isOwner || (withinWindow && demoAllows);
 
   const origin = { lat: property.lat, lng: property.lng };
 
@@ -144,6 +155,7 @@ export default async function GuidePage(props: {
       /* The two values that open the home. Outside the booking window they are
          not serialised: not hidden, simply absent from the HTML. */
       accessCode: reveal ? (stay?.accessCodeOverride ?? property.accessCode) : null,
+      hasAccessCode: Boolean((stay?.accessCodeOverride ?? property.accessCode).trim()),
       wifiPassword: reveal ? property.wifiPassword : null,
     },
     guide: guide.content,
@@ -175,4 +187,21 @@ export default async function GuidePage(props: {
       <GuideView data={payload} />
     </>
   );
+}
+
+/* Handles the particles Spanish names carry ("de", "del", "la") by leaving them
+   lower case, which is how the names are actually written. */
+const PARTICLES = new Set(["de", "del", "la", "las", "los", "y", "da", "do", "van", "von"]);
+
+function titleCase(value: string): string {
+  return value
+    .toLocaleLowerCase("es")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word, index) =>
+      index > 0 && PARTICLES.has(word)
+        ? word
+        : word.charAt(0).toLocaleUpperCase("es") + word.slice(1),
+    )
+    .join(" ");
 }

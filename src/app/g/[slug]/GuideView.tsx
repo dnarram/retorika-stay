@@ -74,6 +74,9 @@ export type GuestPayload = {
     checkoutUntil: string;
     contacts: { kind: ContactKind; phone: string; detail?: string }[];
     accessCode: string | null;
+    /* Whether the host set one at all, which is a different question from
+       whether this viewer may see it. */
+    hasAccessCode: boolean;
   };
   guide: Guide;
   locale: Locale;
@@ -218,7 +221,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
   const filled = useMemo<Record<SectionId, boolean>>(
     () => ({
       arrival: true,
-      entry: Boolean(property.accessCode) || guide.arrivalSteps.some((step) => step.trim()),
+      entry: property.hasAccessCode || guide.arrivalSteps.some((step) => step.trim()),
       wifi: Boolean(property.wifiSsid || property.wifiPassword || guide.wifiNote.trim()),
       /* The body is what the guest reads: a heading on its own is a promise the
          section does not keep. */
@@ -440,6 +443,12 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             ))}
           </ol>
 
+          {/* Plenty of flats have no code at all — a key under a neighbour's
+              mat, a doorman, a lockbox with a physical key. Showing an empty
+              "access code" block that says "available the day before you
+              arrive" to a guest who is already inside is worse than showing
+              nothing: it makes them hunt for something that does not exist. */}
+          {property.hasAccessCode ? (
           <div className="mt-4 rounded-xl border border-brand-line bg-brand-soft p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-brand-ink">
               {t.labels.accessCode}
@@ -476,6 +485,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               </p>
             )}
           </div>
+          ) : null}
         </Card>
       </Section>
     ),
@@ -845,20 +855,35 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </a>
 
       <header className="relative bg-brand-ink px-5 pb-6 pt-6 text-white">
-        {/* Anchored to the header, outside the masthead composition. It used to
-            live inside it, so the centred and banded styles moved the way out
-            around with the title — navigation that relocates when the host
-            changes a palette is navigation nobody trusts. */}
-        {data.isOwner ? (
-          <a
-            href={data.backToEditor ?? "/panel"}
-            className="no-print absolute left-5 top-5 z-10 inline-flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white"
-          >
-            ← {data.backToEditor ? t.backToEditor : t.myProperties}
-          </a>
-        ) : null}
+        {/* Both live in the same centred container as everything else, on a
+            row of their own above the masthead.
 
-        <div className={`mx-auto max-w-2xl lg:max-w-6xl ${data.isOwner ? "pt-7" : ""}`}>
+            They used to be absolutely positioned against the header, so on a
+            wide screen they sat at the very edge of the window while the title
+            sat in the middle of the page — and the gap changed with the style
+            and the screen. Navigation that moves depending on how the guide is
+            themed is navigation nobody trusts. */}
+        <div className="mx-auto max-w-2xl lg:max-w-6xl">
+          <div className="no-print mb-3 flex items-start justify-between gap-3">
+            {data.isOwner ? (
+              <a
+                href={data.backToEditor ?? "/panel"}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white"
+              >
+                ← {data.backToEditor ? t.backToEditor : t.myProperties}
+              </a>
+            ) : (
+              <span />
+            )}
+            <LanguageSwitcher
+              current={data.locale}
+              autoTranslated={data.autoTranslated}
+              note={t.autoTranslated}
+            />
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-2xl lg:max-w-6xl">
           <GuideMasthead
             style={style}
             eyebrow={t.guideTitle}
@@ -867,13 +892,6 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               property.hostName
                 ? `${property.city} · ${t.labels.host}: ${property.hostName}`
                 : property.city
-            }
-            aside={
-              <LanguageSwitcher
-                current={data.locale}
-                autoTranslated={data.autoTranslated}
-                note={t.autoTranslated}
-              />
             }
 
           />
@@ -888,7 +906,7 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           </p>
         ) : null}
 
-        {data.audience === "listing" ? (
+        {data.audience === "listing" && !data.isOwner ? (
           <p className="mt-4 flex items-start gap-2 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand-ink">
             <IconInfo size={16} /> {t.showcase}
           </p>

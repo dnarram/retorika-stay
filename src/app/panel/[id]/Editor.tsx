@@ -485,24 +485,6 @@ export default function Editor({
           {/* The publish button lives in the header, visible from every step:
               it is the one action the host is working towards, and burying it
               in step 7 made it invisible. It disappears once published. */}
-          {/* The host writes in one language and the rest are generated on
-              publish. Asking them to "review" a language they may not speak was
-              a permanent, impossible chore in their dashboard. */}
-          <label className="flex items-center gap-2 text-sm">
-            <span className="text-muted">Idioma de la guía</span>
-            <select
-              value={property.defaultLocale}
-              onChange={(event) => patchProperty({ defaultLocale: event.target.value as Locale })}
-              className="rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-brand"
-            >
-              {LOCALES.map((code) => (
-                <option key={code} value={code}>
-                  {LOCALE_NAMES[code]}
-                </option>
-              ))}
-            </select>
-          </label>
-
           {!property.published ? (
             <button
               type="button"

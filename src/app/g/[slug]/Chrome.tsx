@@ -20,25 +20,17 @@ export function GuideMasthead({
   eyebrow,
   title,
   subtitle,
-  aside,
 }: {
   style: StyleId;
   eyebrow: string;
   title: string;
   subtitle: string;
-  /* Language selector, kept out of the composition's way. */
-  aside: React.ReactNode;
 }) {
   const centred = style === "sello";
 
   return (
     <div className={centred ? "text-center" : ""}>
-      <div
-        className={`flex items-start gap-3 ${centred ? "justify-center" : "justify-between"}`}
-      >
-        {!centred ? <Eyebrow style={style} text={eyebrow} /> : <span />}
-        <div className={centred ? "absolute right-5 top-6" : ""}>{aside}</div>
-      </div>
+      {!centred ? <Eyebrow style={style} text={eyebrow} /> : null}
 
       {centred ? (
         <>

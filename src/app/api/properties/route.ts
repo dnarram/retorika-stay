@@ -1,9 +1,10 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { currentHostId } from "@/lib/auth";
 import { getRepo } from "@/lib/repo";
-import type { Guide, Property } from "@/lib/schema";
+import { localeSchema, type Guide, type Property } from "@/lib/schema";
 import { DEFAULT_THEME } from "@/lib/theme";
 
 const bodySchema = z.object({
@@ -47,6 +48,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Datos no válidos", detail: parsed.error.flatten() }, { status: 422 });
   }
 
+  const jar = await cookies();
+  const hostLocale = localeSchema.safeParse(jar.get("retorika_locale")?.value).success
+    ? (jar.get("retorika_locale")!.value as Property["defaultLocale"])
+    : "es";
+
   const repo = getRepo();
   /* The host is logged in, so their name is already known: asking for it again
      is friction with nothing on the other side. */
@@ -71,7 +77,9 @@ export async function POST(request: Request) {
     hiddenSections: [],
     visitedSteps: [],
     theme: DEFAULT_THEME,
-    defaultLocale: "es",
+    /* The language the host chose on the way in, rather than a question asked
+       again halfway through the editor. */
+    defaultLocale: hostLocale,
     published: false,
     pin: null,
   };

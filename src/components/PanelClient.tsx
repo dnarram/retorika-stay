@@ -268,13 +268,27 @@ export default function PanelClient({
             ))}
           </div>
           {error ? <p className="mt-3 text-sm text-alert-ink">{error}</p> : null}
-          <button
-            type="submit"
-            disabled={busy || !form.name || !form.city || !form.address}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {busy ? "Buscando la dirección…" : "Crear y empezar la guía"} <IconArrow size={16} />
-          </button>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              disabled={busy || !form.name || !form.city || !form.address}
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {busy ? "Buscando la dirección…" : "Crear y empezar la guía"} <IconArrow size={16} />
+            </button>
+            {/* A form you can open by accident and cannot close is a trap. */}
+            <button
+              type="button"
+              onClick={() => {
+                setCreating(false);
+                setError(null);
+                setForm({ name: "", city: "", address: "" });
+              }}
+              className="rounded-full px-4 py-2 text-sm font-medium text-muted ring-1 ring-line"
+            >
+              Cancelar
+            </button>
+          </div>
         </form>
       ) : null}
 
