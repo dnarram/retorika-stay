@@ -31,7 +31,15 @@ npm run db:seed           # carga los dos alojamientos de ejemplo
 npm run dev
 ```
 
-**Acceso al panel:** `belen@retorika.es` / `retorika2026`
+**Acceso al panel:** `belen@retorika.es` · `retorika2026` — anfitriona con dos alojamientos y sus guías terminadas
+- `admin@retorika.es` · `retorika2026` — administrador de Retorika: ve el panel de negocio, sin alojamientos propios
+- `nuevo@retorika.es` · `retorika2026` — anfitrión recién registrado, sin nada creado
+
+Para dejar la base de datos como recién instalada, con las tres cuentas y sus guías y sin rastro de las pruebas:
+
+```bash
+CONFIRM=si npm run db:reset-demo
+```
 
 También se puede entrar con Google (OAuth 2.0 / OIDC). El botón solo aparece si están definidas
 `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`; sin ellas, el acceso por correo y contraseña sigue

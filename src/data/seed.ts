@@ -16,19 +16,52 @@ export type GuideRecord = {
   content: Guide;
 };
 
+/* scrypt(N=16384,r=8,p=1) of "retorika2026" — see src/lib/auth.ts. The four
+   demo accounts share it: one password to type is one less thing between a
+   reviewer and the product. */
+const DEMO_PASSWORD_HASH =
+  "6707c91ddecc4e4a99eac7cf97a4c401:2dc5c162be5eedc5dbadfcf62c4e7619586ee7050c4b2707f6f4f68a5399c600";
+
+/* Four accounts, each one a different starting point, because the interesting
+   questions about this product are answered from different chairs:
+
+     · belen    — a working host: two properties, guides finished, bookings and
+                  a history of guest activity. What the product looks like when
+                  it is being used.
+     · admin    — Retorika's own seat. No properties on purpose: the business
+                  panel has to make sense to somebody who never writes a guide,
+                  and putting flats under the admin would have hidden that.
+     · nuevo    — a host who has just registered and has nothing. The empty
+                  states, the first-run flow and the wizard from zero.
+
+   `npm run db:reset-demo` returns all of them to exactly this state. */
 export const HOSTS = [
   {
     id: "host_belen",
     email: "belen@retorika.es",
-    name: "Belén",
-    /* The demo account doubles as the admin so whoever reviews this can open
-       the business panel without being handed a second password. */
+    name: "Belén Montes",
+    role: "host" as const,
+    source: "directo",
+    createdAt: null,
+    passwordHash: DEMO_PASSWORD_HASH,
+  },
+  {
+    id: "host_admin",
+    email: "admin@retorika.es",
+    name: "Retorika",
     role: "admin" as const,
     source: "directo",
     createdAt: null,
-    /* scrypt(N=16384,r=8,p=1) of "retorika2026" — see src/lib/auth.ts */
-    passwordHash:
-      "6707c91ddecc4e4a99eac7cf97a4c401:2dc5c162be5eedc5dbadfcf62c4e7619586ee7050c4b2707f6f4f68a5399c600",
+    passwordHash: DEMO_PASSWORD_HASH,
+  },
+  {
+    id: "host_nuevo",
+    email: "nuevo@retorika.es",
+    name: "Ana Ruiz",
+    role: "host" as const,
+    source: "guia",
+    createdAt: null,
+    passwordHash: DEMO_PASSWORD_HASH,
   },
 ];
 
