@@ -23,14 +23,47 @@ import { getRepo } from "./repo";
    than a total, because the guide works offline.
 --------------------------------------------------------------------------- */
 
-export type Funnel = { label: string; count: number; hint: string };
+export type Funnel = {
+  label: string;
+  count: number;
+  hint: string;
+  /* Two denominators, because they answer different questions: how many of the
+     previous step made it here (where the leak is) and how many of everyone who
+     ever signed up made it here (how far the product carries a cohort). */
+  ofPrevious: number | null;
+  ofTop: number;
+};
+
+export type Series = { month: string; value: number }[];
+
+/* A level with nothing to compare it to is trivia. Every headline figure in
+   this panel carries its own denominator or its own previous period, and says
+   which. */
+export type Trend = {
+  current: number;
+  previous: number;
+  /* Percentage change, or null when the previous period was zero — dividing by
+     zero and printing "+∞%" is how dashboards lie. */
+  changePct: number | null;
+};
+
+export type Verdict = {
+  tone: "bien" | "atencion" | "sin-datos";
+  headline: string;
+  detail: string;
+};
 
 export type AdminStats = {
+  /* Small samples produce confident nonsense. Every ratio in this panel is
+     computed the same way regardless, but the panel is told when the numbers
+     are too thin to lean on, and says so instead of pretending. */
+  sample: { hosts: number; properties: number; bookings: number; thin: boolean };
+  verdict: Verdict;
   hosts: {
     total: number;
-    newThisMonth: number;
-    newLastMonth: number;
+    newHosts: Trend;
     sources: { value: string; count: number }[];
+    series: { hosts: Series; properties: Series; bookings: Series; opens: Series };
   };
   /* The only funnel that matters for this product: an account is worth nothing
      until a guest has opened a guide. */
@@ -39,11 +72,28 @@ export type AdminStats = {
     /* Median rather than mean: one host who signs up and finishes six months
        later would drag an average into meaninglessness. */
     medianHoursToFirstGuide: number | null;
+    /* The same median for hosts who registered this month against last month:
+       the level says how long onboarding takes, the comparison says whether it
+       is getting better. */
+    medianThisMonth: number | null;
+    medianLastMonth: number | null;
     publishedRate: number;
+    /* Of every host who ever registered, how many reached a guide a guest
+       opened. The single number that says whether the product works. */
+    endToEndRate: number;
   };
   /* Where hosts stop inside the editor. This is the metric the visitedSteps
      column was worth adding for, and it points straight at the step to fix. */
-  wizard: { step: number; label: string; reached: number }[];
+  wizard: {
+    step: number;
+    label: string;
+    reached: number;
+    /* Share of properties that got this far, and the drop from the step before
+       it — the leak, rather than the level. */
+    pct: number;
+    dropFromPrevious: number;
+  }[];
+  worstStep: { step: number; label: string; dropFromPrevious: number } | null;
   content: {
     properties: number;
     published: number;
@@ -55,6 +105,7 @@ export type AdminStats = {
     themes: { value: string; count: number }[];
   };
   guests: {
+    opensPerPublishedGuide: number;
     opens: number;
     unique: number;
     bookingsWithGuide: number;
@@ -67,7 +118,7 @@ export type AdminStats = {
   };
   /* Retention by sign-up cohort. Active means the host touched a property that
      month — the cheapest honest definition available without sessions. */
-  cohorts: { cohort: string; size: number; active: number }[];
+  cohorts: { cohort: string; size: number; active: number; pct: number }[];
   platform: {
     databaseMB: number | null;
     metricRows: number;
@@ -83,6 +134,26 @@ const STEP_LABELS = [
   "Moverse y emergencias",
   "Salida, preguntas y publicación",
 ];
+
+/* Six months of buckets, always present even when empty: a series with holes
+   in it invites the reader to join the dots wrongly. */
+function monthsBack(count: number, now: Date): string[] {
+  return Array.from({ length: count }, (_, index) =>
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (count - 1 - index), 1))
+      .toISOString()
+      .slice(0, 7),
+  );
+}
+
+function trend(current: number, previous: number): Trend {
+  return {
+    current,
+    previous,
+    /* Null rather than infinity: going from zero to one is not "+100%", it is
+       the first one, and the panel says so in words. */
+    changePct: previous === 0 ? null : Math.round(((current - previous) / previous) * 100),
+  };
+}
 
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -110,10 +181,11 @@ export async function adminStats(): Promise<AdminStats> {
       updated_at: Date;
     }[]>`select id, host_id, published, visited_steps, hidden_sections, theme,
              created_at, updated_at from properties`,
-    sql<{ id: string; opened_at: Date | null; revoked: boolean }[]>`
-      select id, opened_at, revoked from stays`,
-    sql<{ kind: string; value: string; count: number }[]>`
-      select kind, value, sum(count)::int as count from metrics group by kind, value`,
+    sql<{ id: string; opened_at: Date | null; revoked: boolean; created_at: Date }[]>`
+      select id, opened_at, revoked, created_at from stays`,
+    sql<{ kind: string; value: string; count: number; month: string }[]>`
+      select kind, value, sum(count)::int as count, to_char(day, 'YYYY-MM') as month
+      from metrics group by kind, value, to_char(day, 'YYYY-MM')`,
     sql<{ n: number }[]>`select count(*)::int as n from guides`,
     sql<{ n: number }[]>`select count(*)::int as n from places`,
   ]);
@@ -146,8 +218,14 @@ export async function adminStats(): Promise<AdminStats> {
     stays: stayRows.map((row) => ({
       openedAt: row.opened_at ? new Date(row.opened_at) : null,
       revoked: row.revoked,
+      createdAt: row.created_at ? new Date(row.created_at) : null,
     })),
-    metrics: metricRows.map((row) => ({ kind: row.kind, value: row.value, count: row.count })),
+    metrics: metricRows.map((row) => ({
+      kind: row.kind,
+      value: row.value,
+      count: row.count,
+      month: row.month,
+    })),
     guides: guideRows[0]?.n ?? 0,
     places: placeRows[0]?.n ?? 0,
     databaseMB,
@@ -177,8 +255,17 @@ async function demoStats(): Promise<AdminStats> {
       createdAt: new Date(),
       updatedAt: new Date(),
     })),
-    stays: stays.map((s) => ({ openedAt: s.openedAt ? new Date(s.openedAt) : null, revoked: s.revoked })),
-    metrics: metrics.map((m) => ({ kind: m.kind, value: m.value, count: m.count })),
+    stays: stays.map((s) => ({
+      openedAt: s.openedAt ? new Date(s.openedAt) : null,
+      revoked: s.revoked,
+      createdAt: new Date(),
+    })),
+    metrics: metrics.map((m) => ({
+      kind: m.kind,
+      value: m.value,
+      count: m.count,
+      month: (m.day ?? new Date().toISOString()).slice(0, 7),
+    })),
     guides: guides.length,
     places: places.length,
     databaseMB: null,
@@ -197,8 +284,8 @@ type Input = {
     createdAt: Date | null;
     updatedAt: Date | null;
   }[];
-  stays: { openedAt: Date | null; revoked: boolean }[];
-  metrics: { kind: string; value: string; count: number }[];
+  stays: { openedAt: Date | null; revoked: boolean; createdAt: Date | null }[];
+  metrics: { kind: string; value: string; count: number; month: string }[];
   guides: number;
   places: number;
   databaseMB: number | null;
@@ -265,7 +352,11 @@ function build(input: Input): AdminStats {
       return acc;
     }, {}),
   )
-    .map(([cohort, value]) => ({ cohort, ...value }))
+    .map(([cohort, value]) => ({
+      cohort,
+      ...value,
+      pct: value.size ? Math.round((value.active / value.size) * 100) : 0,
+    }))
     .sort((a, b) => b.cohort.localeCompare(a.cohort))
     .slice(0, 6);
 
@@ -283,38 +374,142 @@ function build(input: Input): AdminStats {
     ["faq", "Preguntas"],
   ] as const;
 
-  return {
-    hosts: {
-      total: hosts.length,
-      newThisMonth: hosts.filter((h) => h.createdAt && monthOf(h.createdAt) === thisMonth).length,
-      newLastMonth: hosts.filter((h) => h.createdAt && monthOf(h.createdAt) === lastMonth).length,
-      sources,
-    },
-    funnel: [
-      { label: "Se registran", count: hosts.length, hint: "cuentas creadas" },
-      {
-        label: "Crean un alojamiento",
-        count: hostsWithProperty.size,
-        hint: "el primer paso real",
-      },
-      {
-        label: "Rellenan la guía",
-        count: withContent.length,
-        hint: "al menos tres secciones abiertas",
-      },
-      { label: "La publican", count: published.length, hint: "visible para un huésped" },
-      { label: "Crean una reserva", count: liveStays.length, hint: "enlace con fechas" },
-      { label: "Un huésped la abre", count: opened.length, hint: "el producto ha servido" },
-    ],
-    activation: {
-      medianHoursToFirstGuide: median(hoursToFirst),
-      publishedRate: properties.length ? Math.round((published.length / properties.length) * 100) : 0,
-    },
-    wizard: STEP_LABELS.map((label, index) => ({
+  const months = monthsBack(6, now);
+  const countIn = (dates: (Date | null)[], month: string) =>
+    dates.filter((date) => date && monthOf(date) === month).length;
+
+  const series = {
+    hosts: months.map((month) => ({
+      month,
+      value: countIn(hosts.map((h) => h.createdAt), month),
+    })),
+    properties: months.map((month) => ({
+      month,
+      value: countIn(properties.map((p) => p.createdAt), month),
+    })),
+    bookings: months.map((month) => ({
+      month,
+      value: countIn(stays.map((s) => s.createdAt), month),
+    })),
+    opens: months.map((month) => ({
+      month,
+      value: metrics
+        .filter((m) => m.kind === "open" && m.month === month)
+        .reduce((total, m) => total + m.count, 0),
+    })),
+  };
+
+  const newHosts = trend(
+    hosts.filter((h) => h.createdAt && monthOf(h.createdAt) === thisMonth).length,
+    hosts.filter((h) => h.createdAt && monthOf(h.createdAt) === lastMonth).length,
+  );
+
+  const medianFor = (month: string) =>
+    median(
+      hosts
+        .filter((host) => host.createdAt && monthOf(host.createdAt) === month)
+        .map((host) => {
+          const first = firstProperty.get(host.id);
+          if (!host.createdAt || !first) return null;
+          return (first.getTime() - host.createdAt.getTime()) / 3600000;
+        })
+        .filter((value): value is number => value !== null && value >= 0),
+    );
+
+  const funnelRaw: { label: string; count: number; hint: string }[] = [
+    { label: "Se registran", count: hosts.length, hint: "cuentas creadas" },
+    { label: "Crean un alojamiento", count: hostsWithProperty.size, hint: "el primer paso real" },
+    { label: "Rellenan la guía", count: withContent.length, hint: "al menos tres secciones abiertas" },
+    { label: "La publican", count: published.length, hint: "visible para un huésped" },
+    { label: "Crean una reserva", count: liveStays.length, hint: "enlace con fechas" },
+    { label: "Un huésped la abre", count: opened.length, hint: "el producto ha servido" },
+  ];
+  const funnelTop = funnelRaw[0].count || 1;
+  const funnel: Funnel[] = funnelRaw.map((stage, index) => ({
+    ...stage,
+    ofTop: Math.round((stage.count / funnelTop) * 100),
+    ofPrevious:
+      index === 0
+        ? null
+        : funnelRaw[index - 1].count === 0
+          ? null
+          : Math.round((stage.count / funnelRaw[index - 1].count) * 100),
+  }));
+
+  const wizard = STEP_LABELS.map((label, index) => {
+    const reached = properties.filter((p) => p.visitedSteps.includes(index + 1)).length;
+    const before =
+      index === 0
+        ? properties.length
+        : properties.filter((p) => p.visitedSteps.includes(index)).length;
+    return {
       step: index + 1,
       label,
-      reached: properties.filter((p) => p.visitedSteps.includes(index + 1)).length,
-    })),
+      reached,
+      pct: properties.length ? Math.round((reached / properties.length) * 100) : 0,
+      dropFromPrevious: before === 0 ? 0 : Math.round(((before - reached) / before) * 100),
+    };
+  });
+  const worstStep =
+    [...wizard].sort((a, b) => b.dropFromPrevious - a.dropFromPrevious)[0] ?? null;
+
+  const endToEndRate = hosts.length ? Math.round((opened.length / hosts.length) * 100) : 0;
+  const thin = hosts.length < 10 || properties.length < 10;
+
+  /* One sentence at the top, derived rather than decorative. Growth alone is
+     not health: an account that never reaches an opened guide is a number, not
+     a customer, so the verdict weighs activation before volume — and refuses to
+     pronounce at all on a sample this small. */
+  const verdict: Verdict = thin
+    ? {
+        tone: "sin-datos",
+        headline: "Muestra demasiado pequeña para concluir nada",
+        detail: `Con ${hosts.length} anfitriones y ${properties.length} alojamientos, cualquier porcentaje se mueve entero al añadir un caso. Los números están abajo; las conclusiones, cuando haya volumen.`,
+      }
+    : endToEndRate >= 40 && (newHosts.changePct ?? 0) >= 0
+      ? {
+          tone: "bien",
+          headline: "El producto convierte y no pierde ritmo",
+          detail: `${endToEndRate} de cada 100 registros terminan con un huésped abriendo una guía, y las altas de este mes no caen frente al anterior.`,
+        }
+      : {
+          tone: "atencion",
+          headline:
+            endToEndRate < 40
+              ? "Entran cuentas, pero pocas llegan al huésped"
+              : "Convierte bien, pero entran menos cuentas",
+          detail:
+            endToEndRate < 40
+              ? `Solo ${endToEndRate} de cada 100 registros terminan con una guía abierta por un huésped. El escalón que más pierde está en el embudo de abajo.`
+              : `La conversión aguanta (${endToEndRate}%), pero las altas bajan un ${Math.abs(newHosts.changePct ?? 0)}% frente al mes pasado.`,
+        };
+
+  return {
+    sample: {
+      hosts: hosts.length,
+      properties: properties.length,
+      bookings: stays.length,
+      thin,
+    },
+    verdict,
+    hosts: {
+      total: hosts.length,
+      newHosts,
+      sources,
+      series,
+    },
+    funnel,
+    activation: {
+      medianHoursToFirstGuide: median(hoursToFirst),
+      medianThisMonth: medianFor(thisMonth),
+      medianLastMonth: medianFor(lastMonth),
+      publishedRate: properties.length
+        ? Math.round((published.length / properties.length) * 100)
+        : 0,
+      endToEndRate,
+    },
+    wizard,
+    worstStep,
     content: {
       properties: properties.length,
       published: published.length,
@@ -340,6 +535,9 @@ function build(input: Input): AdminStats {
         .slice(0, 5),
     },
     guests: {
+      opensPerPublishedGuide: published.length
+        ? Math.round((sum("open") / published.length) * 10) / 10
+        : 0,
       opens: sum("open"),
       unique: sum("unique"),
       bookingsWithGuide: opened.length,

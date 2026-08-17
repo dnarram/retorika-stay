@@ -29,13 +29,15 @@ export default async function AdminPage() {
   if (account?.role !== "admin") notFound();
 
   const stats = await adminStats();
-  const { hosts, funnel, activation, wizard, content, guests, cohorts, platform } = stats;
+  const { sample, verdict, hosts, funnel, activation, wizard, worstStep, content, guests, cohorts, platform } =
+    stats;
 
-  const top = funnel[0]?.count || 1;
-  const conversion = funnel.length
-    ? Math.round((funnel[funnel.length - 1].count / top) * 100)
-    : 0;
-  const worstStep = [...wizard].sort((a, b) => a.reached - b.reached)[0];
+  /* The biggest leak in the funnel, named rather than left for the reader to
+     find by comparing six bars. */
+  const leak = funnel
+    .slice(1)
+    .map((stage, index) => ({ stage, lost: funnel[index].count - stage.count, from: funnel[index] }))
+    .sort((a, b) => b.lost - a.lost)[0];
 
   return (
     <main className="mx-auto max-w-5xl px-5 py-10">
@@ -49,15 +51,43 @@ export default async function AdminPage() {
         </Link>
       </header>
 
+      {/* Verdict ------------------------------------------------------ */}
+      <section
+        className={`mt-6 rounded-card p-5 ${
+          verdict.tone === "bien"
+            ? "bg-ok-soft"
+            : verdict.tone === "atencion"
+              ? "bg-alert-soft"
+              : "bg-brand-soft"
+        }`}
+      >
+        <p className="font-display text-lg font-semibold">{verdict.headline}</p>
+        <p className="mt-1 text-sm">{verdict.detail}</p>
+        {sample.thin ? (
+          <p className="mt-2 text-xs">
+            Muestra actual: {sample.hosts} anfitriones · {sample.properties} alojamientos ·{" "}
+            {sample.bookings} reservas.
+          </p>
+        ) : null}
+      </section>
+
       {/* Headline ---------------------------------------------------- */}
-      <section className="mt-6 grid gap-3 sm:grid-cols-4">
-        <Figure value={String(hosts.total)} label="anfitriones" />
+      <section className="mt-4 grid gap-3 sm:grid-cols-4">
         <Figure
-          value={String(hosts.newThisMonth)}
-          label="altas este mes"
-          note={`${hosts.newLastMonth} el anterior`}
+          value={String(hosts.total)}
+          label="anfitriones registrados"
+          note="total histórico"
         />
-        <Figure value={`${conversion}%`} label="del registro a la guía abierta" />
+        <Figure
+          value={String(hosts.newHosts.current)}
+          label="altas este mes"
+          note={changeNote(hosts.newHosts)}
+        />
+        <Figure
+          value={`${activation.endToEndRate}%`}
+          label="del registro a la guía abierta"
+          note={`${funnel[funnel.length - 1]?.count ?? 0} de ${hosts.total}`}
+        />
         <Figure
           value={
             activation.medianHoursToFirstGuide === null
@@ -65,39 +95,57 @@ export default async function AdminPage() {
               : formatHours(activation.medianHoursToFirstGuide)
           }
           label="mediana hasta la primera guía"
+          note={medianNote(activation.medianThisMonth, activation.medianLastMonth)}
         />
       </section>
 
+      {/* Growth ------------------------------------------------------- */}
+      <Panel
+        title="¿Crece?"
+        lead="Seis meses de altas, alojamientos, reservas y aperturas. Lo que importa no es la altura de la última barra sino la forma de la fila."
+        source="Fechas de creación de cuentas, alojamientos y reservas, y el contador de aperturas agrupado por mes."
+      >
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Spark title="Altas de anfitriones" data={hosts.series.hosts} />
+          <Spark title="Alojamientos creados" data={hosts.series.properties} />
+          <Spark title="Reservas creadas" data={hosts.series.bookings} />
+          <Spark title="Aperturas de huéspedes" data={hosts.series.opens} />
+        </div>
+      </Panel>
+
       {/* Funnel ------------------------------------------------------ */}
       <Panel
-        title="Del registro al huésped"
-        lead="Una cuenta no vale nada hasta que un huésped abre una guía. Este es el único embudo que importa."
+        title="¿Convierte?"
+        lead={
+          leak
+            ? `Una cuenta no vale nada hasta que un huésped abre una guía. La mayor pérdida está entre «${leak.from.label}» y «${leak.stage.label}»: se quedan ${leak.lost} por el camino.`
+            : "Una cuenta no vale nada hasta que un huésped abre una guía."
+        }
+        source="Cada escalón cuenta filas reales: cuentas en la tabla de anfitriones, alojamientos creados, pasos del editor que el anfitrión ha abierto de verdad, guías marcadas como publicadas, reservas con fechas y reservas con sello de primera apertura."
       >
         <ul className="mt-4 space-y-2">
-          {funnel.map((stage, index) => {
-            const previous = index === 0 ? stage.count : funnel[index - 1].count;
-            const drop = previous > 0 ? Math.round(((previous - stage.count) / previous) * 100) : 0;
-            return (
-              <li key={stage.label}>
-                <div className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="font-medium">{stage.label}</span>
-                  <span className="text-muted">
-                    {stage.count}
-                    {index > 0 && drop > 0 ? (
-                      <span className="ml-2 text-alert-ink">−{drop}%</span>
-                    ) : null}
-                  </span>
-                </div>
-                <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-brand-soft">
-                  <div
-                    className="h-full bg-brand"
-                    style={{ width: `${Math.round((stage.count / top) * 100)}%` }}
-                  />
-                </div>
-                <p className="mt-0.5 text-xs text-muted">{stage.hint}</p>
-              </li>
-            );
-          })}
+          {funnel.map((stage, index) => (
+            <li key={stage.label}>
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="font-medium">{stage.label}</span>
+                <span className="text-muted">
+                  {/* Three readings of the same bar: how many, how many of the
+                      step before, and how many of everyone who signed up. */}
+                  <strong className="text-ink">{stage.count}</strong>
+                  {stage.ofPrevious !== null ? (
+                    <span className={stage.ofPrevious < 60 ? "ml-2 text-alert-ink" : "ml-2"}>
+                      {stage.ofPrevious}% del paso anterior
+                    </span>
+                  ) : null}
+                  {index > 0 ? <span className="ml-2 text-muted">· {stage.ofTop}% del total</span> : null}
+                </span>
+              </div>
+              <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-brand-soft">
+                <div className="h-full bg-brand" style={{ width: `${stage.ofTop}%` }} />
+              </div>
+              <p className="mt-0.5 text-xs text-muted">{stage.hint}</p>
+            </li>
+          ))}
         </ul>
       </Panel>
 
@@ -105,10 +153,11 @@ export default async function AdminPage() {
       <Panel
         title="Dónde se quedan dentro del editor"
         lead={
-          worstStep
-            ? `El paso ${worstStep.step}, «${worstStep.label}», es el que menos anfitriones abren.`
-            : "Sin datos todavía."
+          worstStep && worstStep.dropFromPrevious > 0
+            ? `La caída más fuerte está al entrar en el paso ${worstStep.step}, «${worstStep.label}»: se pierde el ${worstStep.dropFromPrevious}% de quienes venían del anterior.`
+            : "Sin caídas apreciables entre pasos."
         }
+        source="El editor apunta cada paso que el anfitrión abre. Se compara con el paso inmediatamente anterior, no con el total, para que la caída señale el escalón concreto que se atraganta."
       >
         <ul className="mt-4 space-y-1.5">
           {wizard.map((step) => (
@@ -118,26 +167,30 @@ export default async function AdminPage() {
               <span className="h-2 flex-1 overflow-hidden rounded-full bg-brand-soft">
                 <span
                   className="block h-full bg-brand"
-                  style={{
-                    width: `${content.properties ? Math.round((step.reached / content.properties) * 100) : 0}%`,
-                  }}
+                  style={{ width: `${step.pct}%` }}
                 />
               </span>
-              <span className="w-10 shrink-0 text-right text-xs text-muted">{step.reached}</span>
+              <span className="w-24 shrink-0 text-right text-xs text-muted">
+                {step.reached} · {step.pct}%
+                {step.dropFromPrevious > 0 ? (
+                  <span className={step.dropFromPrevious >= 30 ? "text-alert-ink" : ""}>
+                    {" "}
+                    −{step.dropFromPrevious}%
+                  </span>
+                ) : null}
+              </span>
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-muted">
-          Se mide con los pasos que el anfitrión ha abierto de verdad, no con el contenido que la
-          plantilla trae puesto.
-        </p>
+
       </Panel>
 
       {/* Product ----------------------------------------------------- */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Panel
           title="Qué se usa del producto"
-          lead={`${content.properties} alojamientos, ${content.published} publicados, ${content.avgPropertiesPerHost} por anfitrión.`}
+          lead={`${content.published} de ${content.properties} alojamientos están publicados (${activation.publishedRate}%), a ${content.avgPropertiesPerHost} por anfitrión.`}
+          source="Cuenta de alojamientos y, para cada sección, cuántos anfitriones NO la han apagado en «Qué se muestra en la guía»."
         >
           <Bars
             items={content.sectionsUsed.map((section) => ({
@@ -159,11 +212,19 @@ export default async function AdminPage() {
 
         <Panel
           title="Qué hacen los huéspedes"
-          lead={`${guests.bookingsWithGuide} de ${guests.bookingsTotal} reservas abrieron su guía.`}
+          lead={`${guests.bookingsWithGuide} de ${guests.bookingsTotal} reservas abrieron su guía · ${guests.opensPerPublishedGuide} aperturas por guía publicada.`}
+          source="Eventos que envía la guía del huésped. Las visitas del propio anfitrión se descartan en el servidor, así que aquí no hay pruebas ni previsualizaciones."
         >
           <dl className="mt-3 grid grid-cols-2 gap-3">
             <MiniFigure value={String(guests.opens)} label="aperturas" />
-            <MiniFigure value={String(guests.unique)} label="dispositivos" />
+            <MiniFigure
+              value={
+                guests.opens > 0
+                  ? `${Math.round((guests.unique / guests.opens) * 100)}%`
+                  : "—"
+              }
+              label="son dispositivos nuevos"
+            />
             <MiniFigure value={String(guests.helpfulYes)} label="«sí me sirvió»" />
             <MiniFigure value={String(guests.misses)} label="búsquedas sin resultado" />
             <MiniFigure value={String(guests.helpfulNo)} label="«no me sirvió»" />
@@ -183,7 +244,11 @@ export default async function AdminPage() {
 
       {/* Retention + acquisition ------------------------------------- */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Panel title="Retención por cohorte" lead="Anfitriones que han tocado su guía este mes.">
+        <Panel
+          title="¿Retiene?"
+          lead="De cada grupo que se registró en un mes, cuántos siguen tocando su guía ahora."
+          source="Cohorte = mes de alta de la cuenta. Activo = tiene algún alojamiento modificado durante el mes en curso."
+        >
           {cohorts.length === 0 ? (
             <p className="mt-3 text-sm text-muted">Sin cohortes todavía.</p>
           ) : (
@@ -197,8 +262,8 @@ export default async function AdminPage() {
                       style={{ width: `${cohort.size ? (cohort.active / cohort.size) * 100 : 0}%` }}
                     />
                   </span>
-                  <span className="w-16 shrink-0 text-right text-xs text-muted">
-                    {cohort.active}/{cohort.size}
+                  <span className="w-24 shrink-0 text-right text-xs text-muted">
+                    {cohort.active}/{cohort.size} · {cohort.pct}%
                   </span>
                 </li>
               ))}
@@ -206,7 +271,11 @@ export default async function AdminPage() {
           )}
         </Panel>
 
-        <Panel title="De dónde vienen" lead="Referente en el momento del registro, agrupado.">
+        <Panel
+          title="¿De dónde vienen?"
+          lead={`${hosts.total} anfitriones, repartidos por el sitio desde el que llegaron al formulario.`}
+          source="La cabecera «referer» del navegador en el momento exacto del registro, reducida a una palabra. No se guarda ningún historial de navegación."
+        >
           <Bars
             items={hosts.sources.map((source) => ({
               label: source.value,
@@ -223,7 +292,11 @@ export default async function AdminPage() {
       </div>
 
       {/* Platform ---------------------------------------------------- */}
-      <Panel title="Plataforma" lead="Lo que ocupa y lo que mueve.">
+      <Panel
+        title="Plataforma"
+        lead="Lo que ocupa y lo que mueve."
+        source="Tamaño real de la base de datos y recuento de filas. Latencia y disponibilidad se miden en la plataforma de despliegue."
+      >
         <dl className="mt-3 grid gap-3 sm:grid-cols-4">
           <MiniFigure
             value={platform.databaseMB === null ? "—" : `${platform.databaseMB} MB`}
@@ -295,10 +368,15 @@ function formatHours(hours: number): string {
 function Panel({
   title,
   lead,
+  source,
   children,
 }: {
   title: string;
   lead: string;
+  /* Where the number comes from, in words somebody who has never seen the
+     database can check. A dashboard whose provenance is a mystery gets
+     believed when it is wrong and ignored when it is right. */
+  source?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -306,7 +384,58 @@ function Panel({
       <h2 className="font-display text-lg font-semibold">{title}</h2>
       <p className="mt-1 text-sm text-muted">{lead}</p>
       {children}
+      {source ? (
+        <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
+          <span className="font-medium text-ink">De dónde sale: </span>
+          {source}
+        </p>
+      ) : null}
     </section>
+  );
+}
+
+/* "+3 frente a 1 el mes pasado" beats "+200%", and when the previous month was
+   zero there is no percentage to give — saying so is more useful than printing
+   an infinity. */
+function changeNote(trend: { current: number; previous: number; changePct: number | null }): string {
+  if (trend.previous === 0 && trend.current === 0) return "sin altas en dos meses";
+  if (trend.previous === 0) return `las primeras: 0 el mes pasado`;
+  const sign = trend.changePct !== null && trend.changePct >= 0 ? "+" : "";
+  return `${sign}${trend.changePct}% · ${trend.previous} el mes pasado`;
+}
+
+function medianNote(current: number | null, previous: number | null): string {
+  if (current === null && previous === null) return "sin altas recientes";
+  if (current === null) return `${formatHours(previous ?? 0)} el mes pasado`;
+  if (previous === null) return `${formatHours(current)} en las altas de este mes`;
+  const faster = current < previous;
+  return `${formatHours(current)} este mes · ${faster ? "más rápido" : "más lento"} que ${formatHours(previous)}`;
+}
+
+/* Six bars, the last one highlighted. Not a chart library for four series of
+   six points: the dependency would weigh more than the data. */
+function Spark({ title, data }: { title: string; data: { month: string; value: number }[] }) {
+  const max = Math.max(1, ...data.map((point) => point.value));
+  const total = data.reduce((sum, point) => sum + point.value, 0);
+  return (
+    <div className="rounded-xl bg-canvas p-3">
+      <div className="flex items-baseline justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</p>
+        <p className="text-xs text-muted">{total} en 6 meses</p>
+      </div>
+      <div className="mt-3 flex h-16 items-end gap-1.5">
+        {data.map((point, index) => (
+          <span key={point.month} className="flex flex-1 flex-col items-center gap-1">
+            <span
+              className={`w-full rounded-t ${index === data.length - 1 ? "bg-brand" : "bg-brand-line"}`}
+              style={{ height: `${Math.max(3, (point.value / max) * 56)}px` }}
+              title={`${point.month}: ${point.value}`}
+            />
+            <span className="text-[9px] text-muted">{point.month.slice(5)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
