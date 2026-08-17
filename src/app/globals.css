@@ -105,12 +105,180 @@ h3,
   font-family: var(--font-sans);
 }
 
-/* Sections the guest chose not to take away on paper. */
+
+
+/* ---------------------------------------------------------------------------
+   Continuous two-column flow for reading mode and for paper.
+
+   The first attempt used a CSS grid, which aligns items row by row: a short
+   section beside a long one left a hole the height of the difference, and the
+   guest had to scroll past white space to reach the rest. Multi-column flow
+   fills the space instead — content spills from the bottom of one column into
+   the top of the next, exactly like a newspaper, and the browser balances the
+   two heights on its own.
+
+   Clarity still wins over density where the two conflict:
+     · a card never splits across a column or a page;
+     · a section heading never sits alone at the foot of a column;
+     · nested columns are switched off inside the flow — two levels of columns
+       is where "dense" turns into "unreadable".
+--------------------------------------------------------------------------- */
+/* Screen columns belong to reading mode only: in section mode a single open
+   section split down the middle would read worse, not better. Paper always
+   flows in two columns, whichever mode the guest happens to be in. */
+@media (min-width: 1024px) {
+  .guide-flow--screen {
+    columns: 2;
+    column-gap: 2.5rem;
+  }
+}
+
+/* A whole section travels together.
+
+   The first attempt relied on `break-after: avoid` for the heading, which
+   browsers honour inconsistently inside multi-column layouts — and when they
+   did not, a heading sat alone at the foot of one column with its content
+   starting the next. That is worse than any amount of white space: the guest
+   reads a title and finds nothing under it.
+
+   So the unit that cannot be split is the section itself, not the heading. The
+   cost is that a very long section may leave one column shorter; the benefit is
+   that a title is never orphaned from what it announces. */
+.guide-flow section,
+.guide-flow > * {
+  break-inside: avoid;
+  page-break-inside: avoid; /* older engines, still needed for print */
+}
+
+.guide-flow h2,
+.guide-flow h3 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.guide-flow section {
+  margin-top: 0;
+  margin-bottom: 1.75rem;
+}
+
+.guide-flow .wide-two-col {
+  columns: 1;
+}
+
+/* Recommendations are the longest list in the guide: on a wide screen they get
+   their own two columns when the rest of the page is not already flowing. */
+@media (min-width: 1024px) {
+  .wide-two-col {
+    columns: 2;
+    column-gap: 1rem;
+  }
+  .wide-two-col > * {
+    break-inside: avoid;
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Paper.
+
+   The printed guide is the reading-mode page on A4, minus whatever the guest
+   deselected — and the deselected sections leave no hole, because they are
+   removed from the flow rather than hidden inside it.
+
+   Single column on purpose. Two columns fit more words per sheet, but a phone
+   photograph of a fridge door is not the use case: the use case is somebody
+   holding a sheet of paper looking for the bin day, and a single measure is
+   faster to scan and impossible to lose your place in.
+
+   Everything below exists to stop the browser cutting things where a reader
+   would not: a heading away from its text, a paragraph across a page turn, a
+   card split down the middle.
+--------------------------------------------------------------------------- */
+@page {
+  size: A4 portrait;
+  margin: 14mm 15mm;
+}
+
 @media print {
+  .guide-flow,
+  .guide-flow--screen {
+    /* One measure, whatever the screen was doing a second ago. */
+    columns: 1 !important;
+  }
+
+  body {
+    font-size: 10.5pt;
+    line-height: 1.45;
+    background: #fff;
+  }
+
+  /* Two lines alone at the foot or head of a page read as a mistake. */
+  p,
+  li,
+  dd,
+  dt {
+    orphans: 3;
+    widows: 3;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* A heading never ends a page. */
+  h1,
+  h2,
+  h3,
+  summary {
+    break-after: avoid;
+    page-break-after: avoid;
+    break-inside: avoid;
+  }
+
+  /* A long section may span pages — a card may not. */
+  section {
+    break-inside: auto;
+  }
+  .print-block,
+  figure,
+  .guide-flow li {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Screen furniture that costs ink and says nothing on paper. */
+  .print-block {
+    padding: 0.45rem 0.7rem !important;
+    border-color: #bbb;
+    box-shadow: none !important;
+  }
+  h1 {
+    font-size: 17pt;
+  }
+  h2 {
+    font-size: 12.5pt;
+  }
+  h3 {
+    font-size: 11pt;
+  }
+
+  /* Details are collapsed on screen and have to be open on paper, or half the
+     house instructions print as a row of headings. */
+  details {
+    display: block !important;
+  }
+  details > summary {
+    list-style: none;
+  }
+  details > *:not(summary) {
+    display: block !important;
+  }
+
+  /* Removed, not hidden: a display:none section leaves no gap behind it. */
   .print-hidden {
     display: none !important;
   }
 }
+
+
 
 /* ---------------------------------------------------------------------------
    Continuous two-column flow for reading mode and for paper.

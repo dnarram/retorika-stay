@@ -34,6 +34,7 @@ import type { Theme } from "@/lib/theme";
 import { wifiQrPayload } from "@/lib/wifi";
 import { GuideMasthead, SectionDivider, SectionHeading } from "./Chrome";
 import Helpful from "./Helpful";
+import { buildIndex, normalise, parts, search, snippet } from "./search";
 import Keepsake, { KeepsakeTeaser } from "./Keepsake";
 import RouteActions from "./RouteActions";
 
@@ -77,6 +78,9 @@ export type GuestPayload = {
     /* Whether the host set one at all, which is a different question from
        whether this viewer may see it. */
     hasAccessCode: boolean;
+    /* The language the host wrote in, used as the fallback for anything not
+       translated yet. */
+    defaultLocale: Locale;
   };
   guide: Guide;
   locale: Locale;
@@ -353,8 +357,17 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     }
   };
 
-  const needle = query.trim().toLowerCase();
-  const searching = needle.length > 0;
+  const needle = normalise(query.trim());
+  const searching = query.trim().length >= 2;
+
+  const index = useMemo(
+    () => buildIndex(guide, places, data.locale, property.defaultLocale, t),
+    [guide, places, data.locale, property.defaultLocale, t],
+  );
+  const results = useMemo(
+    () => (searching ? search(index, query) : []),
+    [index, query, searching],
+  );
   const needleRef = useRef(needle);
   needleRef.current = needle;
   const visiblePlaces = useMemo(
@@ -362,20 +375,18 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       recommendations.filter((place) => {
         const inCategory = category === "todas" || place.category === category;
         if (!needle) return inCategory;
-        const note = place.notes[data.locale];
-        const haystack = `${place.name} ${note?.tagline ?? ""} ${note?.note ?? ""}`.toLowerCase();
+        const note = place.notes[data.locale] ?? place.notes[property.defaultLocale];
+        /* Category included and accents stripped: "restaurantes" now finds the
+           restaurants, which is the whole reason anyone types it. */
+        const haystack = normalise(
+          `${place.name} ${t.categories[place.category]} ${note?.tagline ?? ""} ${note?.note ?? ""}`,
+        );
         return inCategory && haystack.includes(needle);
       }),
     [recommendations, category, needle, data.locale],
   );
 
-  const visibleFaqs = useMemo(
-    () =>
-      needle
-        ? guide.faqs.filter((f) => `${f.q} ${f.a}`.toLowerCase().includes(needle))
-        : guide.faqs,
-    [guide.faqs, needle],
-  );
+  const visibleFaqs = guide.faqs;
 
   const visitedPlaces = useMemo(
     () => places.filter((place) => visited.includes(place.id)),
@@ -1037,10 +1048,70 @@ export default function GuideView({ data }: { data: GuestPayload }) {
             </ul>
           </nav>
 
-          <div className={reading ? "guide-flow guide-flow--screen" : "guide-flow"}>
+          {/* While there is a query the guide steps aside and shows answers: a
+            list of matches, each naming the section it lives in. Highlighting
+            words inside eight collapsed sections would be highlighting things
+            nobody can see. */}
+        {searching ? (
+          <div className="no-print mt-4">
+            {results.length === 0 ? (
+              <p className="rounded-card border border-dashed border-line p-6 text-center text-sm text-muted">
+                {t.noResults}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {results.map((hit, position) => (
+                  <li key={`${hit.section}-${position}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuery("");
+                        openSection(hit.section);
+                      }}
+                      className="w-full rounded-card border border-line bg-white p-3 text-left transition hover:border-brand"
+                    >
+                      <span className="flex items-center gap-2 text-xs font-medium text-brand-deep">
+                        {sectionIcon(hit.section)}
+                        {t.sections[hit.section]}
+                      </span>
+                      <span className="mt-1 block text-sm font-medium">
+                        {parts(hit.title, query).map((chunk, i) =>
+                          chunk.match ? (
+                            <mark key={i} className="rounded bg-brand-soft px-0.5 text-brand-ink">
+                              {chunk.text}
+                            </mark>
+                          ) : (
+                            <span key={i}>{chunk.text}</span>
+                          ),
+                        )}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted">
+                        {parts(snippet(hit, query), query).map((chunk, i) =>
+                          chunk.match ? (
+                            <mark key={i} className="rounded bg-brand-soft px-0.5 text-brand-ink">
+                              {chunk.text}
+                            </mark>
+                          ) : (
+                            <span key={i}>{chunk.text}</span>
+                          ),
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
+        <div
+          className={`${searching ? "hidden" : ""} ${
+            reading ? "guide-flow guide-flow--screen" : "guide-flow"
+          }`}
+        >
             {/* Small and medium screens: the hub. Two columns on a phone, four
                 on a tablet, where there is room to show them all at once. */}
-            <div className={`no-print lg:hidden ${active || searching || reading ? "hidden" : ""}`}>
+            <div className={`no-print lg:hidden ${active || reading ? "hidden" : ""}`}>
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {/* On a wide screen the guide stops being a narrow ribbon with two
                 empty margins. Two columns halve the scrolling and, just as
@@ -1087,11 +1158,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
               /* While the guest is typing, the sections that can actually
                  answer a search take over on every screen size. Filtering
                  inside a closed section would look like "no results". */
-              const searchable = id === "places" || id === "faq";
-              /* Reading mode is the old continuous page: everything stacked, in
-                 the order the phase dictates. */
-              const openOnLarge = reading ? true : searching ? searchable : (active ?? order[0]) === id;
-              const openOnSmall = reading ? true : searching ? searchable : active === id;
+              /* Reading mode is the continuous page: everything stacked, in the
+                 order the phase dictates. */
+              const openOnLarge = reading ? true : (active ?? order[0]) === id;
+              const openOnSmall = reading ? true : active === id;
               const classes = [
                 openOnSmall ? "" : "hidden",
                 openOnLarge ? "lg:block" : "lg:hidden",

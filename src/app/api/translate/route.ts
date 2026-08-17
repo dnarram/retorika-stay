@@ -28,6 +28,18 @@ const bodySchema = z.object({
 
 const ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
+const placeNotesSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string(),
+        tagline: z.string().max(80),
+        note: z.string().max(400),
+      }),
+    )
+    .max(60),
+});
+
 export async function POST(request: Request) {
   const hostId = await currentHostId();
   if (!hostId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -102,5 +114,75 @@ export async function POST(request: Request) {
   }
 
   await repo.saveGuide(propertyId, to, candidate.data, false);
+
+  /* The recommendations travel too.
+
+     Translating the guide but leaving the host's own notes in Spanish was the
+     worst of both worlds: a French guest read "Getting around" in French and
+     then "pedid el rabo de toro" untranslated — and the note is the whole
+     reason a recommendation is worth more than a map pin. Names, addresses and
+     dish names stay as they are, which is what a guest needs in order to ask
+     for the place out loud. */
+  const places = await repo.listPlaces(propertyId);
+  const pending = places.filter((place) => {
+    const note = place.notes[from];
+    return (note?.tagline?.trim() || note?.note?.trim()) && !place.notes[to]?.note?.trim();
+  });
+
+  if (pending.length > 0) {
+    const payloadIn = pending.map((place) => ({
+      id: place.id,
+      tagline: place.notes[from]?.tagline ?? "",
+      note: place.notes[from]?.note ?? "",
+    }));
+
+    const placesResponse = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: [
+              `Traduce del ${LOCALE_NAMES[from]} al ${LOCALE_NAMES[to]}.`,
+              'Recibes {"items":[{"id","tagline","note"}]} y devuelves EXACTAMENTE la misma estructura.',
+              "No traduzcas nombres propios de locales, calles ni platos típicos: si un plato o un sitio se llama de una forma, esa forma se conserva y, si hace falta, se explica entre paréntesis.",
+              "No inventes nada. Mantén el tono de un anfitrión hablando a su huésped.",
+            ].join(" "),
+          },
+          { role: "user", content: JSON.stringify({ items: payloadIn }) },
+        ],
+      }),
+    });
+
+    if (placesResponse.ok) {
+      const raw = (await placesResponse.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const parsedPlaces = placeNotesSchema.safeParse(
+        JSON.parse(raw.choices?.[0]?.message?.content ?? "{}"),
+      );
+      if (parsedPlaces.success) {
+        for (const item of parsedPlaces.data.items) {
+          const place = places.find((candidatePlace) => candidatePlace.id === item.id);
+          if (!place) continue;
+          await repo.savePlace({
+            ...place,
+            notes: { ...place.notes, [to]: { tagline: item.tagline, note: item.note } },
+          });
+        }
+      }
+    }
+    /* A failure here leaves the guide translated and the notes in the original
+       language, which is exactly what happened before and is still readable.
+       It is not worth failing the whole publish over. */
+  }
+
   return NextResponse.json({ ok: true, locale: to, reviewed: false, locales: LOCALES });
 }

@@ -156,6 +156,7 @@ export default async function GuidePage(props: {
          not serialised: not hidden, simply absent from the HTML. */
       accessCode: reveal ? (stay?.accessCodeOverride ?? property.accessCode) : null,
       hasAccessCode: Boolean((stay?.accessCodeOverride ?? property.accessCode).trim()),
+      defaultLocale: property.defaultLocale,
       wifiPassword: reveal ? property.wifiPassword : null,
     },
     guide: guide.content,
