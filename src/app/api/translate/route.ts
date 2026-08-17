@@ -45,10 +45,42 @@ const ENDPOINT =
    it. From the host's chair the guide simply stayed in Spanish with no error
    anywhere: the failure was invisible, which is why this took three rounds to
    find. Now every failure has a sentence attached to it. */
+/* Models get retired, and this one did — on 16 August 2026, mid-project, and
+   the app went quiet because a single hard-coded name had gone 404. So the
+   name is now a list: the one you configure, then the current recommended
+   model, then its smaller sibling. A decommission costs a slower translation,
+   not a broken feature, and the day somebody sets GROQ_MODEL it wins outright. */
+const MODELS = [
+  process.env.GROQ_MODEL,
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+].filter((name): name is string => Boolean(name));
+
 async function ask(
   system: string,
   user: string,
 ): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
+  let last = "No se pudo contactar con el traductor.";
+  for (const model of MODELS) {
+    const attempt = await askModel(model, system, user);
+    if (attempt.ok) return attempt;
+    last = attempt.error;
+    /* Only a missing model is worth retrying with another name. A rate limit or
+       a timeout would fail identically on the next one and would just double
+       the wait. */
+    if (!attempt.retryWithAnotherModel) return attempt;
+  }
+  return { ok: false, error: last };
+}
+
+async function askModel(
+  model: string,
+  system: string,
+  user: string,
+): Promise<
+  | { ok: true; content: string }
+  | { ok: false; error: string; retryWithAnotherModel?: boolean }
+> {
   try {
     const response = await fetch(ENDPOINT, {
       method: "POST",
@@ -57,7 +89,7 @@ async function ask(
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+        model,
         temperature: 0.2,
         response_format: { type: "json_object" },
         messages: [
@@ -71,10 +103,15 @@ async function ask(
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
+      /* 404 and 400 are how a provider says "that model is gone". */
+      const missingModel =
+        (response.status === 404 || response.status === 400) && detail.includes("model");
       return {
         ok: false,
-        error:
-          response.status === 429
+        retryWithAnotherModel: missingModel,
+        error: missingModel
+          ? `El modelo «${model}» ya no está disponible en el proveedor.`
+          : response.status === 429
             ? "El traductor está saturado ahora mismo (límite de uso). Inténtalo en un minuto."
             : `El traductor respondió ${response.status}. ${detail.slice(0, 120)}`,
       };

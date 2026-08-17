@@ -60,7 +60,11 @@ export async function POST(request: Request) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+      /* Same retired model, same fix. The assistant only ever makes one call,
+         so it takes the recommended model directly rather than a fallback
+         chain: if it fails the host sees the error and writes the steps
+         themselves, which is what they were going to do anyway. */
+      model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
       temperature: 0.3,
       max_tokens: 700,
       messages: [
