@@ -130,6 +130,7 @@ export default function Editor({
   const [places, setPlaces] = useState(initialPlaces);
   const [assist, setAssist] = useState<string | null>(null);
   const [assistTarget, setAssistTarget] = useState<"arrival" | "checkout" | null>(null);
+  const [translating, setTranslating] = useState(false);
   const [country, setCountry] = useState<string | undefined>(undefined);
   const [nearby, setNearby] = useState<NearbyPlace[] | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<string | null>(null);
@@ -321,6 +322,31 @@ export default function Editor({
     setGuides(nextGuides);
     persist(property, nextGuide);
   };
+
+  /* Publishing translates everything; this is for what the host adds
+     afterwards, which is almost always a recommendation or two. */
+  async function refreshTranslations() {
+    setTranslating(true);
+    setMessage(null);
+    const targets = LOCALES.filter((code) => code !== property.defaultLocale);
+    let done = 0;
+    for (const locale of targets) {
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ propertyId: property.id, from: property.defaultLocale, to: locale }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        setMessage(payload?.error ?? "No se pudieron actualizar las traducciones.");
+        setTranslating(false);
+        return;
+      }
+      done += 1;
+    }
+    setTranslating(false);
+    setMessage(`Listo: ${done} idiomas al día.`);
+  }
 
   async function savePlace(place: Place) {
     setPlaces((current) => current.map((p) => (p.id === place.id ? place : p)));
@@ -1269,6 +1295,26 @@ export default function Editor({
                     );
                   })}
                 </ul>
+              </Panel>
+
+              <Panel title="Idiomas">
+                <p className="text-sm text-muted">
+                  Tu guía se escribe en {LOCALE_NAMES[property.defaultLocale]} y se traduce sola a{" "}
+                  {LOCALES.filter((code) => code !== property.defaultLocale)
+                    .map((code) => LOCALE_NAMES[code])
+                    .join(", ")}{" "}
+                  al publicarla. Si añades recomendaciones después, púlsalo para que también
+                  viajen.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void refreshTranslations()}
+                  disabled={translating}
+                  className="mt-3 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-brand-line disabled:opacity-40"
+                >
+                  {translating ? "Traduciendo…" : "Actualizar traducciones"}
+                </button>
+                {message ? <p className="mt-2 text-sm text-brand-deep">{message}</p> : null}
               </Panel>
 
               <Panel title="Publicación">

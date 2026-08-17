@@ -24,6 +24,10 @@ const bodySchema = z.object({
   propertyId: z.string(),
   from: localeSchema,
   to: localeSchema,
+  /* Regenerate the guide text even if a version already exists. Off by default:
+     the usual call is "make sure this language is complete", and re-translating
+     text that is already there costs a request and changes nothing. */
+  force: z.boolean().default(false),
 });
 
 const ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
@@ -53,7 +57,7 @@ export async function POST(request: Request) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Datos no válidos" }, { status: 400 });
-  const { propertyId, from, to } = parsed.data;
+  const { propertyId, from, to, force } = parsed.data;
   if (from === to) return NextResponse.json({ error: "Idiomas iguales" }, { status: 400 });
 
   const repo = getRepo();
@@ -65,6 +69,15 @@ export async function POST(request: Request) {
   const source = await repo.getGuide(propertyId, from);
   if (!source) return NextResponse.json({ error: "No hay guía de origen" }, { status: 404 });
 
+  /* The endpoint completes a language rather than rebuilding it. Before, the
+     caller decided by asking "does this guide exist?", which meant that once
+     the four versions existed nothing was ever translated again — and the
+     host's recommendation notes, which are added later and one at a time, never
+     were at all. */
+  const existing = await repo.getGuide(propertyId, to);
+  const needsGuide = force || !existing;
+
+  if (needsGuide) {
   const system = [
     "Eres traductor profesional de contenido turístico.",
     `Traduce del ${LOCALE_NAMES[from]} al ${LOCALE_NAMES[to]}.`,
@@ -113,7 +126,8 @@ export async function POST(request: Request) {
     );
   }
 
-  await repo.saveGuide(propertyId, to, candidate.data, false);
+    await repo.saveGuide(propertyId, to, candidate.data, false);
+  }
 
   /* The recommendations travel too.
 

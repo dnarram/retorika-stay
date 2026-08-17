@@ -50,11 +50,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
      open in their dashboard forever. The guide tells the guest instead, and
      that closes the matter. */
   let translated: string[] = [];
+  /* Every publish completes every language.
+
+     The previous version only translated languages whose GUIDE was missing, so
+     the moment the four versions existed nothing was ever translated again —
+     and the host's recommendation notes, which are written later and one at a
+     time, were never translated at all. That is the bug a guest saw as a guide
+     in French with the notes still in Spanish.
+
+     The endpoint is now cheap to call repeatedly: it skips text that is already
+     there and only fills what is missing. */
   if (patch.published === true && process.env.GROQ_API_KEY) {
     const source = updated?.defaultLocale ?? property.defaultLocale;
-    const existing = new Set((await repo.listGuides(id)).map((g) => g.locale));
-    const missing = LOCALES.filter((locale) => locale !== source && !existing.has(locale));
-    for (const locale of missing) {
+    const targets = LOCALES.filter((locale) => locale !== source);
+    for (const locale of targets) {
       const response = await fetch(new URL("/api/translate", request.url), {
         method: "POST",
         headers: { "content-type": "application/json", cookie: request.headers.get("cookie") ?? "" },
