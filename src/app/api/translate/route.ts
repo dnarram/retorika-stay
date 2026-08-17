@@ -73,6 +73,12 @@ async function ask(
   return { ok: false, error: last };
 }
 
+/* Belt and braces: any prompt that reaches the provider carries the word,
+   whatever the caller wrote. The failure it prevents is a 400 that reads like a
+   bug in our code and is really a contract we forgot to honour. */
+const withJsonWord = (prompt: string): string =>
+  prompt.toLowerCase().includes("json") ? prompt : `${prompt} Responde únicamente con json válido.`;
+
 async function askModel(
   model: string,
   system: string,
@@ -93,7 +99,7 @@ async function askModel(
         temperature: 0.2,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: system },
+          { role: "system", content: withJsonWord(system) },
           { role: "user", content: user },
         ],
       }),
@@ -188,6 +194,10 @@ export async function POST(request: Request) {
       "No añadas, no resumas y no inventes información que no esté en el original.",
       "Mantén sin traducir: nombres propios, calles, marcas, redes WiFi y números.",
       "Adapta las horas y los formatos al uso del idioma de destino, sin cambiar el valor.",
+      /* The provider refuses response_format: json_object unless the word
+         appears in the prompt, and checks for it literally. Written in lower
+         case on purpose: "JSON" in a sentence did not satisfy it. */
+      "Responde únicamente con json válido.",
     ].join(" ");
 
     const answer = await ask(system, JSON.stringify(source.content));
@@ -237,6 +247,7 @@ export async function POST(request: Request) {
         'Recibes {"items":[{"id","tagline","note"}]} y devuelves EXACTAMENTE la misma estructura.',
         "No traduzcas nombres propios de locales, calles ni platos típicos: si un plato o un sitio se llama de una forma, esa forma se conserva y, si hace falta, se explica entre paréntesis.",
         "No inventes nada. Mantén el tono de un anfitrión hablando a su huésped.",
+        "Responde únicamente con json válido.",
       ].join(" "),
       JSON.stringify({
         items: pending.map((place) => ({
