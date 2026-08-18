@@ -62,7 +62,7 @@ siendo el único camino, que además es el que permite usar la cuenta de demostr
 | 8 | `/panel` | Tarjetas de alojamientos, reservas con su enlace, aviso de rotación del código, métricas anónimas y alta de alojamiento con búsqueda de coordenadas. |
 | 9 | Modo avión + recargar una guía | Sigue abriéndose: se guardó en el móvil en la primera visita. |
 | 10 | `/panel/prop_ronda` → barra derecha | **Aspecto de la guía**: seis paletas, cuatro tipografías, cuatro estilos de sección y vista previa en vivo. |
-| 11 | `/panel/prop_ronda/uso` | **Cómo la usan tus huéspedes**: qué buscaron y no encontraron, qué secciones abren, qué reservas ni la abrieron. |
+| 11 | `/panel/prop_ronda/uso` | **Cómo usan la guía tus huéspedes**: qué buscaron y no encontraron, qué secciones abren, qué reservas ni la abrieron. |
 | 12 | `/admin` (entra como `admin@retorika.es`) | **Panel de negocio**: embudo con conversión, abandono por paso del editor, cohortes, y qué no se mide y por qué. |
 
 ## Cómo responde a los cuatro criterios del encargo

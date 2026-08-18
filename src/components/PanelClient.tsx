@@ -462,7 +462,7 @@ export default function PanelClient({
             <div className="mt-5 rounded-xl bg-canvas p-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Cómo la usan tus huéspedes
+                  Cómo usan la guía tus huéspedes
                 </p>
                 <Link
                   href={`/panel/${row.id}/uso`}
@@ -557,9 +557,70 @@ export default function PanelClient({
       </ul>
 
       {rows.length === 0 && !creating ? (
-        <p className="mt-10 rounded-card border border-dashed border-line p-10 text-center text-muted">
-          Todavía no tienes alojamientos. Crea el primero y tendrás la guía lista en unos minutos.
-        </p>
+        /* The empty state is the only screen where a host has nothing to look
+           at, which makes it the only place a short walkthrough is welcome
+           rather than in the way. Five steps, one line each, and it disappears
+           for good the moment the first property exists — a tutorial that
+           follows you around after you have done the thing is clutter. */
+        <section className="mt-10 rounded-card border border-dashed border-line p-8">
+          <h2 className="font-display text-xl font-semibold">Tu primera guía, en cinco pasos</h2>
+          <p className="mt-1 text-sm text-muted">
+            Unos minutos en total. Puedes parar donde quieras: se guarda solo.
+          </p>
+
+          <ol className="mt-6 space-y-4">
+            {[
+              {
+                title: "Crea el alojamiento",
+                text: "Nombre, ciudad y dirección. El mapa encuentra el sitio y tú ajustas el punto exacto arrastrándolo.",
+              },
+              {
+                title: "Rellena la guía",
+                text: "Siete pasos con sugerencias de un toque: entrada, WiFi, normas, tus sitios favoritos y a quién llamar.",
+              },
+              {
+                title: "Publícala",
+                text: "Solo hacen falta el nombre y la dirección. Al publicar se traduce sola a inglés, francés y portugués.",
+              },
+              {
+                title: "Crea una reserva",
+                text: "Nombre del huésped y fechas. Genera un enlace propio en el que el código de entrada solo aparece durante su estancia.",
+              },
+              {
+                title: "Compártela",
+                text: "Copia el enlace, mándalo por donde quieras o imprime el QR para dejarlo en la puerta.",
+              },
+            ].map((step, index) => (
+              <li key={step.title} className="flex gap-4">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-soft font-display text-sm font-semibold text-brand-deep">
+                  {index + 1}
+                </span>
+                <span>
+                  <span className="block font-medium">{step.title}</span>
+                  <span className="block text-sm text-muted">{step.text}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2.5 text-sm font-medium text-white"
+            >
+              Empezar por el paso 1 <IconArrow size={16} />
+            </button>
+            {/* Seeing a finished guide before writing one is worth more than any
+                amount of instructions: it shows the host what they are aiming at. */}
+            <Link
+              href="/g/k3f9apx2"
+              className="text-sm font-medium text-brand-deep underline underline-offset-4"
+            >
+              Ver antes una guía terminada
+            </Link>
+          </div>
+        </section>
       ) : null}
     </main>
   );

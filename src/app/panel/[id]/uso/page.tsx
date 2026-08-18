@@ -42,7 +42,7 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
         <Link href="/panel" className="text-sm text-muted hover:text-brand-deep">
           ← Mis alojamientos
         </Link>
-        <h1 className="mt-1 font-display text-2xl font-semibold">Cómo la usan tus huéspedes</h1>
+        <h1 className="mt-1 font-display text-2xl font-semibold">Cómo usan la guía tus huéspedes</h1>
         <p className="text-sm text-muted">
           {property.name} · {property.city}
         </p>
