@@ -223,7 +223,7 @@ export default async function AdminPage() {
         <Panel
           title="Qué hacen los huéspedes"
           lead={`${guests.bookingsWithGuide} de ${guests.bookingsTotal} reservas abrieron su guía · ${guests.opensPerPublishedGuide} aperturas por guía publicada.`}
-          source="Eventos que envía la guía del huésped. Las visitas del propio anfitrión se descartan en el servidor, así que aquí no hay pruebas ni previsualizaciones."
+          source="Eventos que envía la guía del huésped. Las visitas del propio anfitrión se descartan en el servidor, así que aquí no hay pruebas ni previsualizaciones. Las dos aprobaciones responden a preguntas distintas y nunca se suman: la guía pregunta «¿te ha servido?» al pie de cada sección y, por separado, una sola vez sobre el conjunto."
         >
           <dl className="mt-3 grid grid-cols-2 gap-3">
             <MiniFigure value={String(guests.opens)} label="aperturas" />
@@ -235,9 +235,23 @@ export default async function AdminPage() {
               }
               label="son dispositivos nuevos"
             />
-            <MiniFigure value={String(guests.helpfulYes)} label="«sí me sirvió»" />
+            <MiniFigure
+              value={
+                guests.guideYes + guests.guideNo === 0
+                  ? "—"
+                  : `${Math.round((guests.guideYes / (guests.guideYes + guests.guideNo)) * 100)}%`
+              }
+              label="aprueban la guía entera"
+            />
             <MiniFigure value={String(guests.misses)} label="búsquedas sin resultado" />
-            <MiniFigure value={String(guests.helpfulNo)} label="«no me sirvió»" />
+            <MiniFigure
+              value={
+                guests.sectionYes + guests.sectionNo === 0
+                  ? "—"
+                  : `${Math.round((guests.sectionYes / (guests.sectionYes + guests.sectionNo)) * 100)}%`
+              }
+              label="aprueban sección a sección"
+            />
             <MiniFigure value={String(guests.keepsakes)} label="recuerdos creados" />
           </dl>
           {guests.languages.length > 0 ? (

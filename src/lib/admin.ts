@@ -110,8 +110,16 @@ export type AdminStats = {
     unique: number;
     bookingsWithGuide: number;
     bookingsTotal: number;
-    helpfulYes: number;
-    helpfulNo: number;
+    /* Two questions, four numbers. The guide asks "¿te ha servido?" per section
+       and, separately, once about the whole guide, and adding them together
+       produced a figure that answered neither: "12 sí" could be twelve people
+       happy with the wifi instructions or twelve happy with the guide. They are
+       different questions with different meanings and they are now different
+       counters. */
+    sectionYes: number;
+    sectionNo: number;
+    guideYes: number;
+    guideNo: number;
     misses: number;
     keepsakes: number;
     languages: { value: string; count: number }[];
@@ -181,14 +189,29 @@ export async function adminStats(): Promise<AdminStats> {
       updated_at: Date;
     }[]>`select id, host_id, published, visited_steps, hidden_sections, theme,
              created_at, updated_at from properties`,
-    sql<{ id: string; opened_at: Date | null; revoked: boolean; created_at: Date }[]>`
-      select id, opened_at, revoked, created_at from stays`,
+    sql<
+      {
+        id: string;
+        property_id: string;
+        opened_at: Date | null;
+        revoked: boolean;
+        created_at: Date;
+      }[]
+    >`select id, property_id, opened_at, revoked, created_at from stays`,
     sql<{ kind: string; value: string; count: number; month: string }[]>`
       select kind, value, sum(count)::int as count, to_char(day, 'YYYY-MM') as month
       from metrics group by kind, value, to_char(day, 'YYYY-MM')`,
     sql<{ n: number }[]>`select count(*)::int as n from guides`,
     sql<{ n: number }[]>`select count(*)::int as n from places`,
   ]);
+
+  /* Which properties a guest ever opened, so the last step of the funnel can be
+     attributed to the host who owns them. Kept as its own small query because
+     the metrics query above is grouped for the trends and no longer knows which
+     property a row came from. */
+  const openedRows = await sql<{ property_id: string }[]>`
+    select distinct property_id from metrics where kind = 'open'`;
+  const openedProperties: string[] = openedRows.map((row: { property_id: string }) => row.property_id);
 
   let databaseMB: number | null = null;
   try {
@@ -216,6 +239,7 @@ export async function adminStats(): Promise<AdminStats> {
       updatedAt: row.updated_at ? new Date(row.updated_at) : null,
     })),
     stays: stayRows.map((row) => ({
+      propertyId: row.property_id,
       openedAt: row.opened_at ? new Date(row.opened_at) : null,
       revoked: row.revoked,
       createdAt: row.created_at ? new Date(row.created_at) : null,
@@ -228,6 +252,7 @@ export async function adminStats(): Promise<AdminStats> {
     })),
     guides: guideRows[0]?.n ?? 0,
     places: placeRows[0]?.n ?? 0,
+    openedProperties,
     databaseMB,
   });
 }
@@ -256,6 +281,7 @@ async function demoStats(): Promise<AdminStats> {
       updatedAt: new Date(),
     })),
     stays: stays.map((s) => ({
+      propertyId: s.propertyId,
       openedAt: s.openedAt ? new Date(s.openedAt) : null,
       revoked: s.revoked,
       createdAt: new Date(),
@@ -268,6 +294,11 @@ async function demoStats(): Promise<AdminStats> {
     })),
     guides: guides.length,
     places: places.length,
+    openedProperties: properties
+      .filter((property) =>
+        metrics.some((m) => m.kind === "open" && m.count > 0) && property.published,
+      )
+      .map((property) => property.id),
     databaseMB: null,
   });
 }
@@ -284,10 +315,16 @@ type Input = {
     createdAt: Date | null;
     updatedAt: Date | null;
   }[];
-  stays: { openedAt: Date | null; revoked: boolean; createdAt: Date | null }[];
+  stays: {
+    propertyId: string;
+    openedAt: Date | null;
+    revoked: boolean;
+    createdAt: Date | null;
+  }[];
   metrics: { kind: string; value: string; count: number; month: string }[];
   guides: number;
   places: number;
+  openedProperties: string[];
   databaseMB: number | null;
 };
 
@@ -416,13 +453,69 @@ function build(input: Input): AdminStats {
         .filter((value): value is number => value !== null && value >= 0),
     );
 
+  /* EVERY STEP COUNTS DISTINCT HOSTS.
+
+     The first version counted whatever object each step was about: accounts,
+     then properties, then bookings. Comparing them produced percentages above
+     100% and, worse, hid the thing a funnel exists to reveal — one host with a
+     thousand guides made the middle look healthy while ninety-nine hosts who
+     never wrote one were invisible, and a single guide opened a million times
+     made the last step look perfect with every other guide unread.
+
+     One host, one vote, at every step. Somebody with four published flats
+     counts once, exactly like somebody with one. */
+  const propertyHost = new Map(properties.map((property) => [property.id, property.hostId]));
+
+  const hostsWithFilledGuide = new Set(
+    properties.filter((p) => p.visitedSteps.length >= 3).map((p) => p.hostId),
+  );
+  const hostsWithPublished = new Set(published.map((p) => p.hostId));
+  const hostsWithBooking = new Set(
+    stays
+      .filter((stay) => !stay.revoked)
+      .map((stay) => propertyHost.get(stay.propertyId))
+      .filter((id): id is string => Boolean(id)),
+  );
+  /* A guest reached the guide if a booking link was opened OR the property has
+     opens of its own — somebody arriving through the showcase link is a guest
+     too, and the host earned that just the same. */
+  const hostsReached = new Set([
+    ...stays
+      .filter((stay) => !stay.revoked && stay.openedAt)
+      .map((stay) => propertyHost.get(stay.propertyId))
+      .filter((id): id is string => Boolean(id)),
+    ...input.openedProperties
+      .map((propertyId) => propertyHost.get(propertyId))
+      .filter((id): id is string => Boolean(id)),
+  ]);
+
   const funnelRaw: { label: string; count: number; hint: string }[] = [
     { label: "Se registran", count: hosts.length, hint: "cuentas creadas" },
-    { label: "Crean un alojamiento", count: hostsWithProperty.size, hint: "el primer paso real" },
-    { label: "Rellenan la guía", count: withContent.length, hint: "al menos tres secciones abiertas" },
-    { label: "La publican", count: published.length, hint: "visible para un huésped" },
-    { label: "Crean una reserva", count: liveStays.length, hint: "enlace con fechas" },
-    { label: "Un huésped la abre", count: opened.length, hint: "el producto ha servido" },
+    {
+      label: "Crean un alojamiento",
+      count: hostsWithProperty.size,
+      hint: "anfitriones con al menos uno",
+    },
+    {
+      label: "Rellenan una guía",
+      count: hostsWithFilledGuide.size,
+      hint: "con al menos tres pasos del editor abiertos",
+    },
+    {
+      label: "Publican una guía",
+      count: hostsWithPublished.size,
+      hint: "anfitriones con al menos una visible",
+    },
+    {
+      label: "Crean una reserva",
+      count: hostsWithBooking.size,
+      hint: "anfitriones con al menos un enlace con fechas",
+    },
+    {
+      label: "Reciben un huésped",
+      count: hostsReached.size,
+      hint: "alguien que no era el anfitrión abrió su guía",
+    },
   ];
   const funnelTop = funnelRaw[0].count || 1;
   const funnel: Funnel[] = funnelRaw.map((stage, index) => ({
@@ -453,7 +546,10 @@ function build(input: Input): AdminStats {
   const worstStep =
     [...wizard].sort((a, b) => b.dropFromPrevious - a.dropFromPrevious)[0] ?? null;
 
-  const endToEndRate = hosts.length ? Math.round((opened.length / hosts.length) * 100) : 0;
+  /* Same unit as the funnel it summarises: hosts who got a guest, over hosts
+     who registered. Before it divided bookings by accounts, which is not a
+     percentage of anything. */
+  const endToEndRate = hosts.length ? Math.round((hostsReached.size / hosts.length) * 100) : 0;
   const thin = hosts.length < 10 || properties.length < 10;
 
   /* One sentence at the top, derived rather than decorative. Growth alone is
@@ -542,11 +638,21 @@ function build(input: Input): AdminStats {
       unique: sum("unique"),
       bookingsWithGuide: opened.length,
       bookingsTotal: liveStays.length,
-      helpfulYes: metrics
-        .filter((m) => m.kind === "helpful" && m.value.endsWith(":si"))
+      sectionYes: metrics
+        .filter(
+          (m) => m.kind === "helpful" && m.value.endsWith(":si") && !m.value.startsWith("guide:"),
+        )
         .reduce((total, m) => total + m.count, 0),
-      helpfulNo: metrics
-        .filter((m) => m.kind === "helpful" && m.value.endsWith(":no"))
+      sectionNo: metrics
+        .filter(
+          (m) => m.kind === "helpful" && m.value.endsWith(":no") && !m.value.startsWith("guide:"),
+        )
+        .reduce((total, m) => total + m.count, 0),
+      guideYes: metrics
+        .filter((m) => m.kind === "helpful" && m.value === "guide:si")
+        .reduce((total, m) => total + m.count, 0),
+      guideNo: metrics
+        .filter((m) => m.kind === "helpful" && m.value === "guide:no")
         .reduce((total, m) => total + m.count, 0),
       misses: sum("search_miss"),
       keepsakes: sum("keepsake"),
