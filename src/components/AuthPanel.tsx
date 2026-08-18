@@ -36,10 +36,36 @@ export default function AuthPanel({ googleEnabled }: { googleEnabled: boolean })
     setError(payload?.error ?? "No se pudo completar la operación.");
   }
 
-  function demo() {
+  /* Three chairs, three buttons.
+
+     One demo account only ever showed one answer, and the interesting questions
+     about this product are asked from different seats: a host mid-season, the
+     empty first day, and Retorika's own view of the business. Whoever is
+     evaluating this should not have to be told which credentials reveal what —
+     the buttons say it. */
+  const DEMOS = [
+    {
+      email: "belen@retorika.es",
+      label: "Anfitriona con dos guías",
+      detail: "Guías terminadas, reservas y actividad de huéspedes",
+    },
+    {
+      email: "nuevo@retorika.es",
+      label: "Anfitrión recién registrado",
+      detail: "Sin nada creado: el alta desde cero",
+    },
+    {
+      email: "admin@retorika.es",
+      label: "Administración de Retorika",
+      detail: "Panel de negocio, sin alojamientos propios",
+    },
+  ] as const;
+
+  function demo(email: string) {
     setMode("entrar");
-    setEmail("belen@retorika.es");
+    setEmail(email);
     setPassword("retorika2026");
+    setError(null);
   }
 
   return (
@@ -132,13 +158,35 @@ export default function AuthPanel({ googleEnabled }: { googleEnabled: boolean })
         </button>
       </form>
 
-      <button
-        type="button"
-        onClick={demo}
-        className="mt-4 w-full rounded-xl bg-brand-soft px-3 py-2 text-xs text-brand-ink"
-      >
-        Rellenar con la cuenta de demostración
-      </button>
+      <div className="mt-4 rounded-xl bg-brand-soft p-3">
+        <p className="text-xs font-medium text-brand-ink">Cuentas de demostración</p>
+        <p className="mt-0.5 text-[11px] text-brand-ink/75">
+          Pulsa una y se rellena el formulario. Todas usan la misma contraseña.
+        </p>
+        <div className="mt-2 space-y-1.5">
+          {DEMOS.map((account) => (
+            <button
+              key={account.email}
+              type="button"
+              onClick={() => demo(account.email)}
+              className={`w-full rounded-lg px-3 py-2 text-left transition ${
+                email === account.email
+                  ? "bg-brand text-white"
+                  : "bg-white text-brand-ink hover:ring-1 hover:ring-brand-line"
+              }`}
+            >
+              <span className="block text-xs font-medium">{account.label}</span>
+              <span
+                className={`block text-[11px] ${
+                  email === account.email ? "text-white/80" : "text-muted"
+                }`}
+              >
+                {account.detail}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -73,7 +73,7 @@ export default async function Home() {
                 {
                   icon: <IconGlobe size={20} />,
                   title: "Cuatro idiomas",
-                  body: "Se traduce sola y detecta el idioma del navegador del huésped.",
+                  body: "Se traduce sola, tus recomendaciones incluidas, y detecta el idioma del navegador.",
                 },
                 {
                   icon: <IconQr size={20} />,
