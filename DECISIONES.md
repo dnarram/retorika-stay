@@ -277,3 +277,133 @@ no se decodifica y se cree; se comprueban emisor, audiencia, nonce y que el corr
 portada y el callback rechaza cualquier `state` que no coincida. Correo y contraseña siguen siendo
 el camino principal, entre otras cosas porque es el único que permite entrar con la cuenta de
 demostración.
+
+---
+
+# Cuarta iteración (12–18 de agosto)
+
+## 24. El aspecto de la guía se elige entre opciones compuestas, no con un selector libre
+
+Un anfitrión no es diseñador y no quiere serlo esa tarde. Un selector de color abierto y un menú de tipografías le permiten construir algo ilegible en noventa segundos —gris medio sobre gris claro, una tipografía de titular a tamaño de texto— y después culpar a la app.
+
+Son cuatro decisiones, cada una entre opciones que ya funcionan juntas: **seis paletas**, **cuatro parejas tipográficas** mostradas cada una en su propia letra, **tres radios de esquina** y **cuatro estilos de sección**. Cualquier combinación de las cuatro produce una guía presentable.
+
+Dos límites que el anfitrión no puede romper: los **colores semánticos no cambian** —el fucsia sigue siendo urgencia y el verde confirmación en todas las paletas, porque quien lee «Emergencias» a las dos de la mañana no debería reaprender qué significa el rojo— y el **contraste está fijado en la composición**, así que no existe combinación ilegible.
+
+**Descartado**: subir un logotipo propio y elegir color libre. Es lo que pediría un anfitrión y lo que hundiría la calidad media del producto.
+
+## 25. Un único envoltorio lleva el tema, sin una sola clase condicional
+
+Las utilidades de Tailwind leen variables CSS (`--color-brand`, `--font-display`, `--radius-card`). Sobrescribirlas en un `<div>` contenedor hace que `bg-brand` dentro resuelva al color de *ese* alojamiento. Cero lógica condicional en los componentes y cero hojas de estilo por tema.
+
+La tipografía elegida se carga con un `<link>` que React eleva a `<head>`: un huésped descarga la pareja que su guía usa y ninguna otra.
+
+## 26. Las texturas decorativas se sustituyen por tratamientos de sección
+
+La primera versión ofrecía patrones de fondo. Eran decoración sin nada que decir y se notaba. Lo que da carácter a un manual de bienvenida impreso no es un patrón detrás del título: es **cómo se compone el título, qué marca acompaña a cada rótulo y qué separa una cosa de la siguiente**.
+
+Cuatro direcciones —Sereno, Editorial, Banda y Sello— que cambian esas tres cosas a la vez, más el icono de cada sección en su rótulo. Ninguna cambia una palabra del contenido ni el orden de lectura.
+
+## 27. Apagar una sección no es borrarla
+
+El anfitrión desmarca lo que no quiere enseñar y el contenido **permanece en la base de datos**, listo para volver. Quien lleva un piso sin normas no debería tener que borrarlas para dejar de mostrarlas.
+
+«Cómo llegar» no aparece en esa lista: una guía sin dirección no es una guía.
+
+## 28. Una sección se marca completa solo si el anfitrión la ha abierto
+
+El progreso se calculaba por contenido, y las guías nacen con normas y pasos de salida de plantilla. Un anfitrión veía secciones tachadas sin haber leído una línea.
+
+Ahora hace falta **contenido y visita**: `properties.visited_steps` registra los pasos que el editor abrió de verdad. Contenido prerrelleno que nadie ha visto es una sugerencia, no una sección terminada. Y de paso resultó ser el dato que hace medible el abandono del editor en el panel de negocio.
+
+## 29. La opinión del huésped se pregunta una vez y de una manera
+
+Descartados los pulgares: un pulgar hacia abajo invita a puntuar la escritura del anfitrión, que no es la pregunta útil. La pregunta útil es **«¿te ha servido?»**, porque un «no» en Normas dice exactamente qué reescribir.
+
+Se pregunta **por sección en modo iconos y una sola vez al final en modo lectura**, nunca las dos cosas: preguntar por la sección y por la guía en la misma pantalla convierte una cortesía en una encuesta. No vuelve a preguntar en ese dispositivo.
+
+## 30. Las visitas del propietario no cuentan en ninguna métrica
+
+Un anfitrión abriendo su propia guía está revisando su trabajo, no usándola. Cada previsualización estaba inflando su propio panel.
+
+El filtro está **en el servidor**, en `/api/track`: el beacon lleva la cookie de sesión, así que la propiedad se establece desde la sesión y no desde algo que la página pueda afirmar. Y es deliberadamente estrecho —excluye al dueño **de esa** propiedad, no a cualquiera con cuenta—: quien es anfitrión en Ronda y huésped en Madrid cuenta como huésped en Madrid.
+
+## 31. El panel del anfitrión responde a cuatro preguntas, no muestra doce contadores
+
+`¿Llega?` · `¿Sirve?` · `¿Ahorra trabajo?` · `¿Se comparte?` Cada bloque responde en una frase y los números sostienen la frase, no al revés.
+
+**Descartadas por medir mal**: el tiempo medio de lectura (quien encuentra el WiFi en ocho segundos es el mejor caso posible y saldría como el peor dato del mes) y la tasa de finalización (una guía no es un curso; nadie debe leerla entera).
+
+**Descartada por no ser medible**: la reducción de preguntas por WhatsApp. En su lugar, un **índice de fricción** —llamadas + búsquedas sin resultado + «no me sirvió»— presentado como tendencia mes a mes y explicado como aproximación, nunca como la cifra real.
+
+## 32. El panel de negocio dice qué no mide y por qué
+
+MRR, CAC, LTV, NPS y coeficiente viral no se pueden calcular sin pasarela de pago, inversión declarada, encuesta ni programa de referidos. **Un número inventado en un panel de negocio es peor que un hueco**: alguien acaba planificando con él.
+
+Lo que sí se mide está construido como análisis y no como niveles: embudo con conversión escalón a escalón, mediana —no media— hasta la primera guía comparada entre cohortes, abandono por paso del editor, retención por cohorte y origen del registro. Cada bloque lleva una línea **«De dónde sale»** en castellano llano, porque un administrador no es programador.
+
+El origen `guia` es el bucle de crecimiento propio del producto: alguien que leyó un manual de bienvenida y volvió para hacer el suyo.
+
+## 33. El recuerdo se compone por secciones y nunca mezcla fotos entre ellas
+
+Una versión anterior rellenaba diapositivas flojas reutilizando fotos de otras secciones, y se leía como lo que era: un generador quedándose sin material.
+
+Ahora **el número de fotos de cada sección elige su composición**: una foto recibe marco, garabato y una frase de viaje; varias generan un collage construido solo con las suyas. La única excepción es el antes/después, que enfrenta «La llegada» con «La despedida» porque eso sí es una idea y no un relleno.
+
+Nada se sube a ningún servidor: todo se dibuja en un lienzo local.
+
+## 34. Una descarga, no nueve
+
+Descargar nueve imágenes seguidas provocaba dos problemas: los navegadores agrupan las descargas programáticas y piden permiso —a veces dos veces—, y revocar cada `objectURL` justo después del clic mataba descargas a medias. Faltaba siempre una imagen distinta.
+
+Se sustituye por **un ZIP escrito a mano**, cien líneas sin dependencias, con las entradas **almacenadas sin comprimir** porque el contenido ya es JPEG. Una descarga, un permiso, nada que se pierda.
+
+**Descartado**: entregar el archivo directamente a la hoja de compartir en el móvil. Pedirle a alguien que publique algo que aún no ha visto es fricción, no ayuda.
+
+## 35. El buscador busca en toda la guía
+
+Prometía la guía y solo miraba el nombre y la nota de las recomendaciones: «restaurantes» no encontraba los restaurantes porque la categoría nunca estaba en el índice, y «banos arabes» sin acentos no encontraba nada.
+
+Ahora indexa las diez secciones, normaliza acentos y mayúsculas, y devuelve **resultados que dicen de qué sección vienen**. Resaltar palabras dentro de ocho secciones plegadas sería resaltar cosas que nadie ve.
+
+## 36. La versión impresa es A4 vertical y a una columna
+
+Dos columnas caben más palabras, pero el caso de uso es alguien con un folio en la mano buscando el día de la basura. Control de viudas y huérfanas, ningún encabezado cerrando página, ninguna tarjeta partida, los bloques plegables abiertos en papel y las secciones descartadas eliminadas del flujo para que no dejen hueco.
+
+## 37. Tres hallazgos de seguridad encontrados auditando, no programando
+
+**El parámetro de demostración ampliaba el acceso.** `?fase=staying` sobre una reserva terminada devolvía el código de la puerta y la clave del WiFi, derribando la función insignia del producto. La regla ahora es monotónica: las fechas reales deciden si el código puede servirse y el parámetro **solo puede quitarlo**.
+
+**El endpoint de QR era un generador abierto.** Aceptaba cualquier URL, así que servía para imprimir un QR de phishing con el dominio de Retorika detrás. Ahora solo admite rutas del sitio o cargas `WIFI:`.
+
+**El login no tenía límite de intentos.** Treinta contraseñas seguidas contra una cuenta real, treinta respuestas y ningún bloqueo. Ahora hay diez intentos por diez minutos con **dos llaves**: por dirección y por cuenta, porque paran ataques distintos.
+
+## 38. Los límites viven en memoria, y se dice
+
+Con varias instancias cada una lleva su cuenta, así que el límite efectivo se multiplica por el número de instancias. Sigue siendo la diferencia entre un ataque de diccionario que termina en una hora y uno que tarda un mes. Llevarlo a la base de datos o a Redis es el siguiente paso, no un secreto.
+
+## 39. El modelo de IA es una lista, no un nombre
+
+El modelo que usábamos se retiró el 16 de agosto, a mitad de proyecto, y la traducción se apagó sin un solo error visible. Ahora el nombre es una **cadena de reserva**: el que configures, el recomendado actual y su hermano pequeño. Una retirada cuesta una traducción más lenta, no una función rota.
+
+Solo se reintenta cuando el error es «ese modelo no existe»: un límite de uso fallaría igual con el siguiente nombre y solo duplicaría la espera.
+
+## 40. Los fallos del proveedor se ven
+
+Las llamadas a la IA se hacían sin capturar la excepción. Cuando el proveedor no respondía, la ruta devolvía un 500 vacío, el bucle de publicación lo ignoraba y **la guía se quedaba sin traducir sin ningún error en ninguna parte**. Ese silencio costó tres rondas de diagnóstico.
+
+Ahora cada fallo tiene una frase —saturación, tiempo agotado, respuesta vacía, JSON inválido— y el endpoint informa de qué hizo: `{guide: "ya estaba", notes: 10, pending: 10}`.
+
+## 41. Tres cuentas de demostración y un reinicio de un comando
+
+Las preguntas interesantes sobre este producto se hacen desde tres sillas: una anfitriona en temporada, un anfitrión el primer día y la administración de Retorika. Una sola cuenta enseñaba una respuesta.
+
+`CONFIRM=si npm run db:reset-demo` borra todo y vuelve a sembrar. **Borrado completo y no quirúrgico** a propósito: «borra lo que no estaba antes» acumula excepciones y acaba dejándose media reserva suelta.
+
+## Lo que sigue sin estar, y por qué
+
+**La interfaz del anfitrión sigue solo en español.** Son unas doscientas cadenas y el cliente objetivo de esta primera versión es español. La guía del huésped —lo que ve el cliente final— sí está en cuatro idiomas. Es una decisión tomada, no una tarea pendiente de la que nos hayamos olvidado.
+
+**Sin cobro, sin soporte y sin analítica web**, que es exactamente por lo que el panel de negocio no finge tener métricas de ingresos.
+
+**Sin pruebas unitarias.** Con el plazo dado, el tiempo fue a un guion de humo que comprueba de extremo a extremo lo que no puede fallar —que el código de la puerta no se sirve fuera de su ventana— más bancos de prueba escritos a medida para lo que no se puede verificar compilando: un traductor falso para la cadena de traducción y un renderizado real de las diapositivas del recuerdo. Ambos encontraron fallos que el compilador no veía.

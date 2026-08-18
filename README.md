@@ -27,7 +27,7 @@ Con PostgreSQL:
 ```bash
 cp .env.example .env      # rellena DATABASE_URL y AUTH_SECRET
 npm run db:migrate        # aplica db/schema.sql (o db/migrations/ si ya existía)
-npm run db:seed           # carga los dos alojamientos de ejemplo
+npm run db:seed           # carga las tres cuentas y los dos alojamientos de ejemplo
 npm run dev
 ```
 
@@ -38,7 +38,8 @@ npm run dev
 Para dejar la base de datos como recién instalada, con las tres cuentas y sus guías y sin rastro de las pruebas:
 
 ```bash
-CONFIRM=si npm run db:reset-demo
+CONFIRM=si npm run db:reset-demo   # borra todo y deja solo las cuentas de prueba
+npm run db:reset-metrics           # borra solo los contadores, conservando las guías
 ```
 
 También se puede entrar con Google (OAuth 2.0 / OIDC). El botón solo aparece si están definidas
@@ -60,15 +61,18 @@ siendo el único camino, que además es el que permite usar la cuenta de demostr
 | 7 | `/g/r7d3ka92?lang=fr` | Cuatro idiomas, con aviso de traducción automática. |
 | 8 | `/panel` | Tarjetas de alojamientos, reservas con su enlace, aviso de rotación del código, métricas anónimas y alta de alojamiento con búsqueda de coordenadas. |
 | 9 | Modo avión + recargar una guía | Sigue abriéndose: se guardó en el móvil en la primera visita. |
+| 10 | `/panel/prop_ronda` → barra derecha | **Aspecto de la guía**: seis paletas, cuatro tipografías, cuatro estilos de sección y vista previa en vivo. |
+| 11 | `/panel/prop_ronda/uso` | **Cómo la usan tus huéspedes**: qué buscaron y no encontraron, qué secciones abren, qué reservas ni la abrieron. |
+| 12 | `/admin` (entra como `admin@retorika.es`) | **Panel de negocio**: embudo con conversión, abandono por paso del editor, cohortes, y qué no se mide y por qué. |
 
 ## Cómo responde a los cuatro criterios del encargo
 
 | Criterio | Decisiones concretas |
 |---|---|
-| **Funcional** | Copiar la clave del WiFi, QR que conecta el móvil a la red, llamada al 112 en un toque, cómo llegar en Maps, checklist de salida, buscador, compartir con el menú nativo del móvil, elegir qué secciones imprimir y funcionamiento sin conexión. |
+| **Funcional** | Copiar la clave del WiFi, QR que conecta el móvil a la red, llamada al 112 en un toque, cómo llegar en Maps, checklist de salida, compartir con el menú nativo del móvil, elegir qué secciones imprimir, buscador sobre las diez secciones, mapa aparte para hospitales y farmacias, recuerdo del viaje en formato carrusel de Instagram compuesto en el propio móvil, y funcionamiento sin conexión. |
 | **Intuitiva** | La guía se reordena según el día de la reserva: quien no ha llegado ve la dirección y la entrada; quien se va hoy, la salida; quien ya se fue, el resumen del viaje. Ninguna sección se oculta, solo cambia de sitio. El anfitrión escribe su dirección y las coordenadas se buscan solas. |
-| **Visualmente atractiva** | Paleta e identidad de Retorika con el color como información y no como adorno: azul para acciones, fucsia solo para urgencia y alertas, verde solo para confirmaciones. Tipografía geométrica en titulares, siguiendo el trazo del logo. |
-| **Bien estructurada** | Un esquema Zod como fuente única de verdad para formulario, API y base de datos. Capa de repositorio con dos implementaciones. Cinco tablas: hechos relacionales, texto multiidioma en JSONB. Decisiones y descartes documentados en [`DECISIONES.md`](./DECISIONES.md). |
+| **Visualmente atractiva** | Paleta e identidad de Retorika con el color como información y no como adorno: azul para acciones, fucsia solo para urgencia y alertas, verde solo para confirmaciones. Cada anfitrión personaliza su guía entre opciones compuestas —seis paletas, cuatro parejas tipográficas, cuatro estilos de sección— sin poder producir una combinación ilegible: los colores semánticos no cambian nunca y el contraste está fijado. La marca de Retorika recorre las ocho superficies adaptada a cada contexto. |
+| **Bien estructurada** | Un esquema Zod como fuente única de verdad para formulario, API y base de datos. Capa de repositorio con dos implementaciones. Seis tablas: hechos relacionales, texto multiidioma en JSONB. Decisiones y descartes documentados en [`DECISIONES.md`](./DECISIONES.md). |
 
 ---
 
@@ -110,9 +114,10 @@ src/
 ├─ app/
 │  ├─ g/[slug]/          Guía del huésped: el slug resuelve reserva o alojamiento, y el
 │  │                     servidor decide idioma, fase y qué datos pueden salir
-│  ├─ panel/             Panel del anfitrión: login, listado y editor por pasos
+│  ├─ panel/             Panel del anfitrión: listado, editor por pasos y métricas por guía
+│  ├─ admin/             Panel de negocio de Retorika (solo rol admin)
 │  └─ api/               qr · unlock · auth (login/registro/google) · properties · stays ·
-│                        guides · places · translate · assist · geocode · track
+│                        guides · places · translate · assist · geocode · nearby · track
 ├─ lib/
 │  ├─ schema.ts          Esquema Zod: formulario, API y base de datos comparten definición
 │  ├─ repo.ts            Contrato de datos con implementación PostgreSQL y modo demostración
@@ -120,10 +125,17 @@ src/
 │  ├─ geo.ts             Haversine, minutos a pie, enlaces a mapas
 │  ├─ completeness.ts    Completitud ponderada por lo que le importa al huésped
 │  ├─ auth.ts            scrypt + JWT en cookie httpOnly
+│  ├─ throttle.ts        Límite de intentos compartido por login, registro y métricas
+│  ├─ theme.ts           Paletas, tipografías y estilos de sección compuestos
+│  ├─ kpis.ts            Contadores → las cuatro preguntas del anfitrión
+│  ├─ admin.ts           Consultas de negocio: embudo, cohortes, activación
+│  ├─ zip.ts             Escritor ZIP sin dependencias para el recuerdo
+│  ├─ emergency.ts       Números de emergencia por país, tabla curada
 │  └─ google.ts          OAuth 2.0 / OIDC a mano, con state y nonce
 ├─ i18n/dictionaries.ts  ES · EN · FR · PT tipados (si falta una clave, no compila)
-└─ data/seed.ts          Dos alojamientos de ejemplo
+└─ data/seed.ts          Tres cuentas y dos alojamientos de ejemplo
 db/schema.sql            DDL de PostgreSQL comentado
+db/migrations/           Ocho migraciones incrementales sobre bases ya desplegadas
 ```
 
 Next.js 15 (App Router) · TypeScript en modo estricto · Tailwind CSS 4 · PostgreSQL con
@@ -141,8 +153,19 @@ dependencia que no hay que mantener. La guía del huésped carga **113 kB** de J
 - Toda escritura se valida con Zod en el servidor; los datos no válidos devuelven 422.
 - PIN limitado a cinco intentos por IP y alojamiento cada diez minutos (cuatro cifras son diez mil
   combinaciones: sin freno, un script las agota).
-- La guía no pide ningún dato al huésped: sin cuentas, sin analítica, sin cookies de terceros. Lo
-  único que se guarda en su móvil es qué pasos de la salida ha marcado.
+- Login y registro limitados: diez intentos por diez minutos, con dos llaves —por dirección y por
+  cuenta— porque paran ataques distintos. Los límites viven en memoria: con varias instancias el
+  techo se multiplica por instancia, y llevarlo a la base de datos es el siguiente paso.
+- El endpoint de QR solo codifica rutas de este sitio o credenciales WiFi: abierto a cualquier URL
+  era un generador de códigos de phishing con este dominio detrás.
+- El parámetro `?fase=` de la demostración solo puede **restringir** lo que se muestra, nunca
+  ampliarlo: las fechas reales deciden si el código de la puerta puede servirse.
+- La guía no pide ningún dato al huésped: sin cuentas, sin analítica de terceros, sin cookies de
+  terceros. Lo que se guarda en su móvil es qué pasos de la salida ha marcado, si ya valoró una
+  sección y qué fotos eligió para su recuerdo, que nunca salen del dispositivo.
+- Las métricas son contadores por alojamiento y día, jamás por persona. Las visitas del propio
+  anfitrión se descartan en el servidor. El único dato ligado a una reserva es si su guía llegó a
+  abrirse, y de eso solo la fecha.
 
 ## Accesibilidad
 
