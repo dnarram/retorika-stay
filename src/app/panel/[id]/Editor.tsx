@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { IconArrow, IconCheck, IconCross, IconInfo, IconQr, IconTrash } from "./editor-icons";
@@ -510,9 +511,18 @@ export default function Editor({
     <div className="mx-auto max-w-5xl px-5 py-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href="/panel" className="text-sm text-muted hover:text-brand-deep">
-            ← Mis alojamientos
-          </Link>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/logo-retorika.png"
+              alt="Retorika"
+              width={120}
+              height={61}
+              className="h-6 w-auto"
+            />
+            <Link href="/panel" className="text-sm text-muted hover:text-brand-deep">
+              ← Mis alojamientos
+            </Link>
+          </div>
           <h1 className="mt-1 font-display text-2xl font-semibold">{property.name}</h1>
           <p className="text-sm text-muted">
             {property.city} · paso {step} de {STEPS.length}

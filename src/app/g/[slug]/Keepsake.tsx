@@ -620,6 +620,38 @@ export default function Keepsake({
     c.restore();
   }
 
+  /* The mark, drawn rather than loaded.
+
+     A blue PNG would sit badly on a photograph and worse on the olive palette,
+     and an image request would be the only network call this feature makes.
+     Traced in whatever colour the slide needs, at the weight of a signature on
+     the back of a print — visible to whoever looks for it, invisible to
+     everyone scrolling past. */
+  function mark(c: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
+    c.save();
+    c.translate(x, y);
+    c.scale(size / 24, size / 24);
+    c.strokeStyle = color;
+    c.lineWidth = 2.4;
+    c.lineCap = "round";
+    c.lineJoin = "round";
+    c.beginPath();
+    c.moveTo(5, 4);
+    c.lineTo(5, 17);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(12, 4);
+    c.lineTo(14.5, 4);
+    c.arc(14.5, 8, 4, -Math.PI / 2, Math.PI / 2);
+    c.lineTo(12, 12);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(12.5, 12);
+    c.lineTo(19, 18.5);
+    c.stroke();
+    c.restore();
+  }
+
   function numberPin(c: CanvasRenderingContext2D, x: number, y: number, n: number) {
     c.save();
     c.fillStyle = palette.brand;
@@ -714,6 +746,9 @@ export default function Keepsake({
     label(c, `${nights} ${t.tripNights}`, W / 2, H - 92, "rgba(255,255,255,0.75)", "center", 22);
     sparkle(c, W * 0.16, H * 0.62, 22, "rgba(255,255,255,0.9)");
     sparkle(c, W * 0.86, H * 0.55, 15, "rgba(255,255,255,0.75)");
+    /* Bottom right, the size of a signature: the one slide everybody sees,
+       credited without taking a millimetre from the photograph. */
+    mark(c, W - 92, H - 118, 22, "rgba(255,255,255,0.45)");
   }
 
   /* ------------------------------ antes ---------------------------------- */
@@ -1067,6 +1102,7 @@ export default function Keepsake({
     c.globalAlpha = 1;
     /* The quiet credit line: small enough not to spoil the picture, present
        enough to answer "where did that come from". */
+    mark(c, W / 2 - 13, H - 158, 26, "rgba(255,255,255,0.55)");
     label(c, `${t.memory.madeWith} · Retorika Stay`, W / 2, H - 88, "rgba(255,255,255,0.5)", "center", 22);
   }
 

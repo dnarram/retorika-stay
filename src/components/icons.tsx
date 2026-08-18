@@ -175,3 +175,28 @@ export const IconTrash = ({ size = 20, className }: IconProps) => (
     <path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10.5 11v5.5M13.5 11v5.5" />
   </svg>
 );
+
+/* The Retorika mark as a monochrome glyph.
+
+   A vector that inherits currentColor rather than the blue PNG, because this
+   one goes into places the corporate blue would clash with: a guide themed in
+   olive, a dark footer, a printed sheet. Same shape, adapted weight — which is
+   what a brand guideline means by "adapt to the context". */
+export const IconRetorika = ({ size = 20, className }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.4"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M5 4v13" />
+    <path d="M12 4h2.5a4 4 0 0 1 0 8H12" />
+    <path d="M12.5 12 19 18.5" />
+  </svg>
+);

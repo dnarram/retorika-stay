@@ -10,17 +10,18 @@ import {
   IconCopy,
   IconCross,
   IconGlobe,
+  IconGrid,
+  IconHelp,
+  IconHome,
   IconInfo,
   IconKey,
+  IconLuggage,
   IconMap,
   IconPhone,
   IconPin,
   IconPrint,
   IconQr,
-  IconGrid,
-  IconHelp,
-  IconHome,
-  IconLuggage,
+  IconRetorika,
   IconRules,
   IconWalk,
   IconWifi,
@@ -910,6 +911,15 @@ export default function GuideView({ data }: { data: GuestPayload }) {
       </header>
 
       <main id="contenido" className="mx-auto max-w-2xl px-5 lg:max-w-6xl">
+        {/* Print only: on screen the masthead already says whose guide this is,
+            but a printed sheet that ends up on somebody's fridge door has
+            nothing above the first section. Set in the same grey as the rest of
+            the paper — a colophon, not a letterhead. */}
+        <p className="mb-4 hidden items-center gap-2 border-b border-line pb-2 text-[10px] uppercase tracking-[0.18em] text-muted print:flex">
+          <IconRetorika size={13} />
+          {property.name} · Retorika Stay
+        </p>
+
         {data.draft ? (
           <p className="mt-4 flex items-start gap-2 rounded-xl bg-alert-soft px-4 py-3 text-sm text-alert-ink">
             <IconInfo size={16} />
@@ -1243,6 +1253,21 @@ export default function GuideView({ data }: { data: GuestPayload }) {
           />
           ) : null}
           {data.autoTranslated ? <p className="mt-3">{t.autoTranslated}</p> : null}
+
+          {/* The credit, at the foot and in one weight of grey.
+
+              Not in the header, and not in Retorika blue: the header belongs to
+              the host's own masthead and the guide wears the palette they
+              chose, so a corporate blue mark up there would fight both. A guest
+              reading about the bins does not need a supplier's logo in their
+              eyeline — but the person who asks "where did this come from" finds
+              the answer exactly where you look for a colophon, at the end. */}
+          <p className="mt-5 flex items-center gap-2 border-t border-line pt-4 text-[11px] text-muted print-block">
+            <IconRetorika size={16} className="opacity-60" />
+            <span>
+              {t.guideTitle} · <span className="font-medium">Retorika Stay</span>
+            </span>
+          </p>
         </footer>
       </main>
     </div>

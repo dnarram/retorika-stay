@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { IconAlert, IconCheck, IconInfo } from "@/components/icons";
@@ -43,7 +44,16 @@ export default async function AdminPage() {
     <main className="mx-auto max-w-5xl px-5 py-10">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-muted">Retorika Stay</p>
+          {/* Same mark, same corner as the host panel: the two rooms of the
+              product should feel like the same building. */}
+          <Image
+            src="/logo-retorika.png"
+            alt="Retorika"
+            width={120}
+            height={61}
+            className="h-7 w-auto"
+          />
+          <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted">Retorika Stay</p>
           <h1 className="font-display text-2xl font-semibold">Panel de negocio</h1>
         </div>
         <Link href="/panel" className="text-sm text-muted hover:text-brand-deep">
