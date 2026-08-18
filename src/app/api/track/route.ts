@@ -51,6 +51,8 @@ function acceptedValue(kind: MetricKind, raw: string): string | null {
       return section === "guide" || SECTIONS.has(section) ? value : null;
     }
     case "language":
+      /* Kept accepted for older clients still in somebody's phone cache, but no
+         current page sends it: the server derives it from the open event. */
       return LOCALES.includes(value as (typeof LOCALES)[number]) ? value : null;
     case "keepsake":
       return value === "carrusel" || value === "historia" ? value : null;
@@ -59,9 +61,15 @@ function acceptedValue(kind: MetricKind, raw: string): string | null {
          discarded rather than trusted. */
       return "";
     case "open":
+      /* The open event now carries the language it was read in, and the server
+         records both from it. Two beacons could drift apart — and did: ten
+         opens against nine languages, because any beacon that fails to leave
+         the phone breaks the pair. One request cannot disagree with itself. */
+      return LOCALES.includes(value as (typeof LOCALES)[number]) ? value : "";
     case "unique":
     case "reveal":
     case "print":
+    case "share":
       /* These are counters, not labels: the value is meaningless and storing
          one would only fragment the count. */
       return "";
@@ -118,7 +126,14 @@ export async function POST(request: Request) {
      nothing either way and a real guest never sends one of these. */
   if (clean === null) return new NextResponse(null, { status: 204 });
 
-  await repo.track(property.id, kind, clean);
+  if (kind === "open") {
+    /* Stored with an empty value so the counter stays a single series, and the
+       language it came in goes to its own counter from the same request. */
+    await repo.track(property.id, "open", "");
+    if (clean) await repo.track(property.id, "language", clean);
+  } else {
+    await repo.track(property.id, kind, clean);
+  }
 
   /* If the link belongs to a booking, the first open is stamped on it. This is
      the only place a metric touches something the host can put a name to, and

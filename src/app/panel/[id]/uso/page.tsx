@@ -255,21 +255,24 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
         number="4"
         title="¿Se comparte?"
         lead={
-          sharing.keepsakes > 0
-            ? `${sharing.keepsakes} huéspedes se llevaron su recuerdo.`
-            : "Todavía nadie ha creado su recuerdo."
+          sharing.keepsakes + sharing.shares + sharing.prints === 0
+            ? "Todavía nadie se ha llevado la guía a ninguna parte."
+            : `${sharing.shares} veces compartida y ${sharing.keepsakes} recuerdos creados.`
         }
       >
         <Figures
           items={[
+            /* Sharing sits first because it is the one that multiplies: a
+               forwarded guide reaches somebody who was never sent the link. */
+            { value: String(sharing.shares), label: "veces que pulsaron compartir" },
             { value: String(sharing.keepsakes), label: "recuerdos descargados" },
             { value: String(sharing.prints), label: "veces que pulsaron imprimir" },
           ]}
         />
         <p className="mt-3 text-xs text-muted">
-          «Pulsaron imprimir» es literalmente eso: cuántas veces alguien abrió el diálogo de
-          impresión de su navegador desde la guía. No sabemos si llegó a salir en papel, ni si
-          acaban publicando el recuerdo: la guía no mira nada fuera de sí misma.
+          Las tres cuentan la intención, no el resultado: cuántas veces alguien abrió el menú de
+          compartir de su móvil, el diálogo de impresión o descargó su recuerdo. Adónde fue después
+          no lo sabemos —la guía no mira nada fuera de sí misma— y por eso no lo decimos.
         </p>
       </Block>
 

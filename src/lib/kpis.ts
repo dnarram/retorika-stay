@@ -64,6 +64,7 @@ export type Kpis = {
   sharing: {
     keepsakes: number;
     prints: number;
+    shares: number;
   };
 };
 
@@ -169,6 +170,7 @@ export function computeKpis(rows: MetricRow[], stays: Stay[], now = new Date()):
     sharing: {
       keepsakes: sum(byKind(rows, "keepsake")),
       prints: sum(byKind(rows, "print")),
+      shares: sum(byKind(rows, "share")),
     },
   };
 }

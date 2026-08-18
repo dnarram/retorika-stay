@@ -238,6 +238,7 @@ export const METRIC_KINDS = [
   "directions",
   "keepsake",
   "print",
+  "share",
 ] as const;
 export const metricKindSchema = z.enum(METRIC_KINDS);
 export type MetricKind = (typeof METRIC_KINDS)[number];

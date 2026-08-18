@@ -281,8 +281,9 @@ export default function GuideView({ data }: { data: GuestPayload }) {
      host which languages their guests arrive in, and tell us nothing about any
      individual person. */
   useEffect(() => {
-    track(property.slug, "open");
-    track(property.slug, "language", data.locale);
+    /* One beacon, two counters. The language rides inside the open event so the
+       two figures are derived from the same request and cannot diverge. */
+    track(property.slug, "open", data.locale);
     /* "Unique" is decided by the device, not by the server: the phone remembers
        that it already counted, and we only ever receive a number. Nobody is
        identified and the figure still means what it says. */
@@ -335,6 +336,10 @@ export default function GuideView({ data }: { data: GuestPayload }) {
     const text = `${guide.welcomeTitle} — ${property.city}`;
     /* navigator.share opens the phone's own sheet: WhatsApp, SMS, mail or
        whatever the guest uses. No backend, no email provider, no cost. */
+    /* Counted at the intent, not at the outcome: what happens after the sheet
+       opens belongs to WhatsApp and we neither see it nor want to. The same
+       honesty as "veces que pulsaron imprimir". */
+    track(property.slug, "share");
     if (navigator.share) {
       try {
         await navigator.share({ title: text, url });

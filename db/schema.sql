@@ -89,7 +89,7 @@ create table if not exists metrics (
   day         date not null default current_date,
   kind        text not null check (kind in
                 ('open','unique','language','section','search_miss','call',
-                 'device','helpful','reveal','directions','keepsake','print')),
+                 'device','helpful','reveal','directions','keepsake','print','share')),
   value       text not null default '',
   count       integer not null default 0,
   primary key (property_id, day, kind, value)
