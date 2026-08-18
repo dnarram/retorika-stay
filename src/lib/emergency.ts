@@ -86,8 +86,3 @@ export function suggestedContacts(countryCode: string | undefined): Suggestion[]
   if (EU_112_ONLY.includes(code)) return [EU_112];
   return [];
 }
-
-/* Everything above is a number that works nationwide. The pharmacy, the local
-   police station and the nearest health centre are specific to the address and
-   are found on the map instead — see the "nearby" search in the editor. */
-export const LOCAL_KINDS: ContactKind[] = ["pharmacy", "health", "police"];

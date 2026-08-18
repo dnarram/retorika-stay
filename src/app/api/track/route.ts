@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentHostId } from "@/lib/auth";
+import { attempt, clientKey } from "@/lib/throttle";
 import { getRepo } from "@/lib/repo";
 import { trackSchema } from "@/lib/schema";
 
@@ -13,40 +14,20 @@ import { trackSchema } from "@/lib/schema";
 
    Aggregating at property level is also what keeps this well clear of being
    personal data, which is exactly where we want to be. */
-/* Counters that anybody can post to are counters anybody can invent. The
-   endpoint has to stay open — the guest has no account and never will — so the
-   protection is a cheap per-IP, per-guide ceiling: far above what a real guest
-   generates in a session, far below what it takes to move a host's dashboard.
-
-   In memory is enough here; with several instances this belongs in the database
-   or in Redis, and that is noted rather than pretended. */
-const seen = new Map<string, { count: number; until: number }>();
-const CEILING = 120;
-const WINDOW_MS = 10 * 60 * 1000;
-
-function overCeiling(key: string): boolean {
-  const now = Date.now();
-  const entry = seen.get(key);
-  if (!entry || entry.until < now) {
-    seen.set(key, { count: 1, until: now + WINDOW_MS });
-    /* The map is bounded so a burst of unique IPs cannot grow it forever. */
-    if (seen.size > 5000) seen.clear();
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > CEILING;
-}
-
 export async function POST(request: Request) {
   const parsed = trackSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false }, { status: 400 });
 
   const { slug, kind, value } = parsed.data;
 
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
-  /* Silently accepted and dropped: an attacker learns nothing from a 429 here,
-     and a real guest never sees it. */
-  if (overCeiling(`${ip}:${slug}`)) return new NextResponse(null, { status: 204 });
+  /* Counters that anybody can post to are counters anybody can invent, so there
+     is a ceiling far above what a real guest generates in a session and far
+     below what it takes to move a host's dashboard. Silently accepted and
+     dropped rather than refused: an attacker learns nothing from the response,
+     and a real guest never sees it either way. */
+  if (!attempt(`${clientKey(request, "track")}:${slug}`, 120, 10 * 60 * 1000).allowed) {
+    return new NextResponse(null, { status: 204 });
+  }
   const repo = getRepo();
   const stay = await repo.getStayBySlug(slug);
   const property = stay ? await repo.getProperty(stay.propertyId) : await repo.getPropertyBySlug(slug);

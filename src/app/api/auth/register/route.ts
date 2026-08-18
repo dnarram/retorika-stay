@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { attempt, clientKey } from "@/lib/throttle";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { createSession, hashPassword } from "@/lib/auth";
@@ -13,6 +14,16 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  /* Five accounts per address per hour: generous for a household sharing a
+     connection, useless for a script. */
+  const verdict = attempt(clientKey(request, "register"), 5, 60 * 60 * 1000);
+  if (!verdict.allowed) {
+    return NextResponse.json(
+      { error: "Demasiadas cuentas creadas desde aquí. Inténtalo más tarde." },
+      { status: 429 },
+    );
+  }
+
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(

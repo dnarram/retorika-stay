@@ -29,15 +29,18 @@ export function isPhase(value: unknown): value is StayPhase {
   return typeof value === "string" && (PHASES as readonly string[]).includes(value);
 }
 
-export function todayISO(now = new Date()): string {
-  return now.toISOString().slice(0, 10);
-}
-
-export function shiftDays(iso: string, days: number): string {
+/* Adds or subtracts days from an ISO date without touching time zones: the
+   arrival and departure of a booking are calendar days, not instants. */
+function shiftDays(iso: string, days: number): string {
   const date = new Date(`${iso}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
+
+export function todayISO(now = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
 
 export function stayPhase(stay: Pick<Stay, "arrival" | "departure">, now = new Date()): StayPhase {
   const today = todayISO(now);

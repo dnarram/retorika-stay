@@ -183,11 +183,9 @@ export type Place = z.infer<typeof placeSchema>;
 export const propertyPatchSchema = propertySchema
   .omit({ id: true, hostId: true, slug: true })
   .partial();
-export const guidePatchSchema = guideSchema.partial();
 export const placeInputSchema = placeSchema.omit({ id: true, propertyId: true });
 
 export type PropertyPatch = z.infer<typeof propertyPatchSchema>;
-export type GuidePatch = z.infer<typeof guidePatchSchema>;
 
 /* ---------------------------------------------------------------------------
    Booking. This was the missing piece: dates used to hang off the property, so
