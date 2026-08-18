@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { currentHostId } from "@/lib/auth";
 import { attempt, clientKey } from "@/lib/throttle";
 import { getRepo } from "@/lib/repo";
-import { trackSchema } from "@/lib/schema";
+import { LOCALES, trackSchema, type MetricKind } from "@/lib/schema";
 
 /* Metrics without third-party analytics and without identifying anyone.
 
@@ -14,6 +14,64 @@ import { trackSchema } from "@/lib/schema";
 
    Aggregating at property level is also what keeps this well clear of being
    personal data, which is exactly where we want to be. */
+/* The endpoint has to stay open — a guest has no account and never will — but
+   open does not mean it should accept anything. It was storing whatever string
+   arrived, so a prankster with the guide link could fill a host's dashboard
+   with invented section names and phantom ratings. Not a security hole: React
+   escapes the output and nothing is executed. It is worse in a way that matters
+   more here, because a dashboard that shows made-up sections is a dashboard the
+   host stops believing.
+
+   So the vocabulary is closed where a vocabulary exists, and left open exactly
+   where the value IS the point: what a guest searched for and did not find, and
+   which recommendation they tapped, are free text by design. */
+const SECTIONS = new Set([
+  "arrival",
+  "entry",
+  "wifi",
+  "house",
+  "rules",
+  "places",
+  "transport",
+  "emergency",
+  "checkout",
+  "faq",
+]);
+
+function acceptedValue(kind: MetricKind, raw: string): string | null {
+  const value = raw.trim().slice(0, 60);
+  switch (kind) {
+    case "section":
+      return SECTIONS.has(value) ? value : null;
+    case "helpful": {
+      /* "<section>:si" or "guide:no" — anything else is noise. */
+      const [section, verdict, ...rest] = value.split(":");
+      if (rest.length > 0) return null;
+      if (verdict !== "si" && verdict !== "no") return null;
+      return section === "guide" || SECTIONS.has(section) ? value : null;
+    }
+    case "language":
+      return LOCALES.includes(value as (typeof LOCALES)[number]) ? value : null;
+    case "keepsake":
+      return value === "carrusel" || value === "historia" ? value : null;
+    case "device":
+      /* Decided by the server from the User-Agent; whatever the client sends is
+         discarded rather than trusted. */
+      return "";
+    case "open":
+    case "unique":
+    case "reveal":
+    case "print":
+      /* These are counters, not labels: the value is meaningless and storing
+         one would only fragment the count. */
+      return "";
+    default:
+      /* search_miss, call, directions: the guest's own words and the host's own
+         place names. Trimmed and capped, never vetted. */
+      return value;
+  }
+}
+
 export async function POST(request: Request) {
   const parsed = trackSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ ok: false }, { status: 400 });
@@ -55,7 +113,12 @@ export async function POST(request: Request) {
     return new NextResponse(null, { status: 204 });
   }
 
-  await repo.track(property.id, kind, value.slice(0, 60));
+  const clean = acceptedValue(kind, value);
+  /* Silently dropped, like everything else here: the guest's page learns
+     nothing either way and a real guest never sends one of these. */
+  if (clean === null) return new NextResponse(null, { status: 204 });
+
+  await repo.track(property.id, kind, clean);
 
   /* If the link belongs to a booking, the first open is stamped on it. This is
      the only place a metric touches something the host can put a name to, and

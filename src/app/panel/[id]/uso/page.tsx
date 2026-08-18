@@ -211,12 +211,18 @@ export default async function UsagePage(props: { params: Promise<{ id: string }>
       <Block
         number="3"
         title="¿Te ahorra trabajo?"
+        /* Both branches of this used to say exactly the same sentence: the
+           comparison was computed, printed and then wasted, so a host could not
+           tell an improving month from a worsening one. The number was never
+           wrong — it just never meant anything. */
         lead={
           workSaved.friction.lastMonth === 0 && workSaved.friction.thisMonth === 0
             ? "Sin fricciones registradas."
             : frictionDelta > 0
-              ? `Este mes tus huéspedes tuvieron ${workSaved.friction.thisMonth} fricciones; el mes pasado, ${workSaved.friction.lastMonth}.`
-              : `Este mes tus huéspedes tuvieron ${workSaved.friction.thisMonth} fricciones; el mes pasado, ${workSaved.friction.lastMonth}.`
+              ? `Vas mejor: ${workSaved.friction.thisMonth} fricciones este mes frente a ${workSaved.friction.lastMonth} el anterior.`
+              : frictionDelta < 0
+                ? `Atención: ${workSaved.friction.thisMonth} fricciones este mes frente a ${workSaved.friction.lastMonth} el anterior.`
+                : `Igual que el mes pasado: ${workSaved.friction.thisMonth} fricciones.`
         }
       >
         <Figures
