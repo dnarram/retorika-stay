@@ -1,14 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
 import AuthPanel from "@/components/AuthPanel";
-import LocalePicker, { LOCALE_COOKIE } from "@/components/LocalePicker";
 import { IconArrow, IconGlobe, IconKey, IconQr, IconWalk, IconWifi } from "@/components/icons";
 import { currentHostId } from "@/lib/auth";
 import { googleConfigured } from "@/lib/google";
 import { getRepo } from "@/lib/repo";
-import { resolveLocale } from "@/i18n/dictionaries";
 
 export const dynamic = "force-dynamic";
 
@@ -19,23 +16,12 @@ export default async function Home() {
   const repo = getRepo();
   const demo = await repo.listProperties("host_belen");
 
-  /* Cookie first, then the browser, then English. The value picked here is the
-     language every guide this host creates will be written in. */
-  const jar = await cookies();
-  const locale = resolveLocale(
-    jar.get(LOCALE_COOKIE)?.value,
-    (await headers()).get("accept-language"),
-    "en",
-  );
 
   return (
     <main className="min-h-screen">
       <section className="bg-brand-ink px-5 pb-16 pt-10 text-white">
         <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-[1fr_380px] lg:items-start">
           <div>
-            <div className="mb-6 flex justify-end lg:hidden">
-              <LocalePicker current={locale} />
-            </div>
             <Image
               src="/logo-retorika-blanco.png"
               alt="Retorika"
@@ -98,9 +84,6 @@ export default async function Home() {
           </div>
 
           <div>
-            <div className="mb-3 hidden justify-end lg:flex">
-              <LocalePicker current={locale} />
-            </div>
             <AuthPanel googleEnabled={googleConfigured()} />
           </div>
         </div>

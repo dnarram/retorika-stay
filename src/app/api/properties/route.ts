@@ -1,10 +1,9 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { currentHostId } from "@/lib/auth";
 import { getRepo } from "@/lib/repo";
-import { localeSchema, type Guide, type Property } from "@/lib/schema";
+import type { Guide, Property } from "@/lib/schema";
 import { DEFAULT_THEME } from "@/lib/theme";
 
 const bodySchema = z.object({
@@ -57,10 +56,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Datos no válidos", detail: parsed.error.flatten() }, { status: 422 });
   }
 
-  const jar = await cookies();
-  const hostLocale = localeSchema.safeParse(jar.get("retorika_locale")?.value).success
-    ? (jar.get("retorika_locale")!.value as Property["defaultLocale"])
-    : "es";
+  /* Guides are authored in Spanish in this version and translated from there.
+
+     A cookie used to decide this, left over from a language picker that was
+     meant to switch the whole app — a feature we deliberately did not build,
+     because the host interface stays Spanish for now. Half-built, it did real
+     damage: a host who once read a guide in Portuguese got every property they
+     created afterwards marked Portuguese, for a year, with no way to see why.
+
+     One authoring language, stated in one place. When the host interface is
+     translated, this is the line that changes. */
+  const hostLocale: Property["defaultLocale"] = "es";
 
   const repo = getRepo();
   /* The host is logged in, so their name is already known: asking for it again

@@ -148,10 +148,17 @@ export default function Editor({
      for the recorded language, that wins; otherwise the editor follows whatever
      is really there, which also repairs the properties created while the two
      could disagree. */
+  /* The version being edited is the Spanish one, because Spanish is the
+     authoring language in this release and everything else is generated from
+     it. Following the property's recorded language instead meant that a
+     property once marked Portuguese — and published, so it has a Portuguese
+     guide like every other language — was edited in Portuguese forever: the
+     host typed into a translation while their original sat untouched.
+
+     The fallback covers the only case left: a guide with no Spanish version at
+     all, where the one that exists is the original. */
   const [locale, setLocale] = useState<Locale>(
-    initialGuides.some((g) => g.locale === initialProperty.defaultLocale)
-      ? initialProperty.defaultLocale
-      : (initialGuides[0]?.locale ?? initialProperty.defaultLocale),
+    initialGuides.some((g) => g.locale === "es") ? "es" : (initialGuides[0]?.locale ?? "es"),
   );
   const [step, setStep] = useState(initialStep);
   const [saveState, setSave] = useState<SaveState>("idle");
@@ -159,10 +166,24 @@ export default function Editor({
   const [message, setMessage] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /* The editor speaks the language of the guide being written: showing
-     "restaurant" and "sights" to a host writing in Spanish was a leak of our
-     internal enum into their screen. */
-  const t = getDictionary(locale);
+  /* THE HOST INTERFACE IS IN SPANISH. ALWAYS.
+
+     This used to read `getDictionary(locale)` — the GUEST dictionary, in the
+     language of the guide being written — to label the category dropdown, the
+     contact kinds and the section switches. That coupled two things that have
+     nothing to do with each other: the language a guide is written in, and the
+     language of the tool used to write it.
+
+     The consequence was a screen half in Spanish and half in Portuguese, and it
+     could not be healed by looking at which guides exist, because publishing
+     generates all four languages: a property once marked Portuguese has a
+     Portuguese guide forever, so the editor kept following it.
+
+     Our stated decision is that the host interface is Spanish in this version.
+     So it is Spanish, from a fixed dictionary, independent of what the guide
+     says. `locale` still selects WHICH guide record is being edited — that part
+     was never the problem. */
+  const t = getDictionary("es");
 
   const guide = useMemo(
     () => guides.find((g) => g.locale === locale) ?? guides[0],
@@ -179,9 +200,10 @@ export default function Editor({
   const countryName = useMemo(
     () =>
       country
-        ? new Intl.DisplayNames([locale], { type: "region" }).of(country) ?? country
+        /* Spanish, like the rest of this screen: "España", never "Espanha". */
+        ? new Intl.DisplayNames(["es"], { type: "region" }).of(country) ?? country
         : "",
-    [country, locale],
+    [country],
   );
 
   const progress = useMemo(
