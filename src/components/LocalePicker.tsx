@@ -36,10 +36,12 @@ export default function LocalePicker({ current }: { current: Locale }) {
       .map((tag) => tag.slice(0, 2).toLowerCase())
       .find((tag) => supported.includes(tag as Locale)) as Locale | undefined;
     const next = preferred ?? "en";
-    if (next !== value) {
-      setValue(next);
-      document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
-    }
+    setValue(next);
+    /* Written even when it matches what the server already guessed. Before, the
+       cookie only appeared when the two disagreed, so the choice was sometimes
+       explicit and sometimes implicit — and an implicit value is one nobody can
+       inspect when a guide turns up in the wrong language. */
+    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

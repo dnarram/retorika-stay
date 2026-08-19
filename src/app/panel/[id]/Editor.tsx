@@ -138,7 +138,21 @@ export default function Editor({
   const [nearbyFailed, setNearbyFailed] = useState(false);
   const [erNearby, setErNearby] = useState<NearbyPlace[] | null>(null);
   const [erStatus, setErStatus] = useState<string | null>(null);
-  const [locale, setLocale] = useState<Locale>(initialProperty.defaultLocale);
+  /* The language of the guide the host is actually editing, not the language a
+     column says they once chose.
+
+     Those two could drift apart — a property marked Portuguese with only a
+     Spanish guide under it — and when they did, the editor labelled every
+     control in a language the content was not written in. The guide record is
+     the thing being edited, so it is the thing that decides. If a guide exists
+     for the recorded language, that wins; otherwise the editor follows whatever
+     is really there, which also repairs the properties created while the two
+     could disagree. */
+  const [locale, setLocale] = useState<Locale>(
+    initialGuides.some((g) => g.locale === initialProperty.defaultLocale)
+      ? initialProperty.defaultLocale
+      : (initialGuides[0]?.locale ?? initialProperty.defaultLocale),
+  );
   const [step, setStep] = useState(initialStep);
   const [saveState, setSave] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -329,21 +343,26 @@ export default function Editor({
   async function refreshTranslations() {
     setTranslating(true);
     setMessage(null);
-    const targets = LOCALES.filter((code) => code !== property.defaultLocale);
+    /* Translating FROM the language the guide is actually written in. Using the
+       recorded field would have asked the server to translate a guide that does
+       not exist in that language, and it would have failed with a 404 that read
+       like a broken endpoint. */
+    const source = locale;
+    const targets = LOCALES.filter((code) => code !== source);
     const report: string[] = [];
 
-    for (const locale of targets) {
+    for (const target of targets) {
       const response = await fetch("/api/translate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ propertyId: property.id, from: property.defaultLocale, to: locale }),
+        body: JSON.stringify({ propertyId: property.id, from: source, to: target }),
       });
       const payload = (await response.json().catch(() => null)) as
         | { error?: string; notes?: number; pending?: number; warning?: string | null }
         | null;
 
       if (!response.ok) {
-        setMessage(`${LOCALE_NAMES[locale]}: ${payload?.error ?? "no se pudo traducir."}`);
+        setMessage(`${LOCALE_NAMES[target]}: ${payload?.error ?? "no se pudo traducir."}`);
         setTranslating(false);
         return;
       }
@@ -351,8 +370,8 @@ export default function Editor({
          even when nothing had been translated. */
       report.push(
         payload?.warning
-          ? `${LOCALE_NAMES[locale]}: ${payload.warning}`
-          : `${LOCALE_NAMES[locale]}: ${payload?.notes ?? 0} notas`,
+          ? `${LOCALE_NAMES[target]}: ${payload.warning}`
+          : `${LOCALE_NAMES[target]}: ${payload?.notes ?? 0} notas`,
       );
     }
 
@@ -1320,8 +1339,8 @@ export default function Editor({
 
               <Panel title="Idiomas">
                 <p className="text-sm text-muted">
-                  Tu guía se escribe en {LOCALE_NAMES[property.defaultLocale]} y se traduce sola a{" "}
-                  {LOCALES.filter((code) => code !== property.defaultLocale)
+                  Tu guía se escribe en {LOCALE_NAMES[locale]} y se traduce sola a{" "}
+                  {LOCALES.filter((code) => code !== locale)
                     .map((code) => LOCALE_NAMES[code])
                     .join(", ")}{" "}
                   al publicarla. Si añades recomendaciones después, púlsalo para que también

@@ -39,6 +39,15 @@ const BLANK: Guide = {
   faqs: [],
 };
 
+/* The one string a blank guide ships with, so it arrives in the same language
+   as everything around it. */
+const WELCOME: Record<Property["defaultLocale"], string> = {
+  es: "Bienvenido a",
+  en: "Welcome to",
+  fr: "Bienvenue à",
+  pt: "Bem-vindo a",
+};
+
 export async function POST(request: Request) {
   const hostId = await currentHostId();
   if (!hostId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -85,6 +94,20 @@ export async function POST(request: Request) {
   };
 
   await repo.createProperty(property);
-  await repo.saveGuide(property.id, "es", { ...BLANK, welcomeTitle: `Bienvenido a ${property.name}` }, true);
+
+  /* THE GUIDE IS CREATED IN THE HOST'S LANGUAGE.
+
+     It used to be hardcoded to Spanish while the property recorded whichever
+     language the host had chosen, so the two could disagree — and did. A host
+     whose cookie said Portuguese got a property marked Portuguese, a guide
+     written in Spanish, an editor labelled in Portuguese, and a panel promising
+     to translate from Portuguese. Every one of those was reading a different
+     field. One language, written once, in both places. */
+  await repo.saveGuide(
+    property.id,
+    hostLocale,
+    { ...BLANK, welcomeTitle: `${WELCOME[hostLocale]} ${property.name}` },
+    true,
+  );
   return NextResponse.json({ property });
 }
