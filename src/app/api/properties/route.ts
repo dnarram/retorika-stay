@@ -90,7 +90,13 @@ export async function POST(request: Request) {
     checkoutUntil: "11:00",
     contacts: [{ kind: "emergency", phone: "112" }],
     hiddenSections: [],
-    visitedSteps: [],
+    /* Step 1 is already done: name, city and address are exactly what the host
+       just typed into the creation form. Leaving it empty meant the checklist
+       opened with "Dirección y coordenadas" unticked over an address the host
+       had just written, until a browser effect caught up — and if they moved on
+       before it landed, they saw a guide accusing them of not having done the
+       thing they had just done. */
+    visitedSteps: [1],
     theme: DEFAULT_THEME,
     /* The language the host chose on the way in, rather than a question asked
        again halfway through the editor. */

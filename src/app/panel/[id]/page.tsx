@@ -20,7 +20,10 @@ export default async function EditorPage(props: {
   if (!property || property.hostId !== hostId) notFound();
 
   const [guides, places] = await Promise.all([repo.listGuides(id), repo.listPlaces(id)]);
-  const { score, checks } = completeness(property, guides, places);
+  /* Only the score is needed here: the checklist is recomputed in the editor on
+     every keystroke, and passing a second, frozen copy of it was a prop nobody
+     read and an invitation to render stale state. */
+  const { score } = completeness(property, guides, places);
 
   return (
     <Editor
@@ -28,7 +31,6 @@ export default async function EditorPage(props: {
       guides={guides}
       places={places}
       initialScore={score}
-      checks={checks}
       mode={repo.mode}
       initialStep={Math.min(Math.max(Number(paso) || 1, 1), 7)}
     />

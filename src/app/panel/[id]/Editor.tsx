@@ -9,7 +9,6 @@ import StepsEditor from "./StepsEditor";
 import ThemePanel from "./ThemePanel";
 import type { GuideRecord } from "@/data/seed";
 import { LOCALE_NAMES, getDictionary } from "@/i18n/dictionaries";
-import type { Check } from "@/lib/completeness";
 import { suggestedContacts } from "@/lib/emergency";
 import type { NearbyPlace } from "@/app/api/nearby/route";
 import { completeness } from "@/lib/completeness";
@@ -114,7 +113,6 @@ export default function Editor({
   property: initialProperty,
   guides: initialGuides,
   places: initialPlaces,
-  checks,
   mode,
   initialStep,
 }: {
@@ -122,7 +120,6 @@ export default function Editor({
   guides: GuideRecord[];
   places: Place[];
   initialScore: number;
-  checks: Check[];
   mode: "postgres" | "demo";
   initialStep: number;
 }) {
@@ -162,6 +159,20 @@ export default function Editor({
   );
   const [step, setStep] = useState(initialStep);
   const [saveState, setSave] = useState<SaveState>("idle");
+  /* The button confirms and then goes back to offering.
+
+     Left reading "Guardado" it became a label instead of a control, and a host
+     who wanted to make sure — the whole reason someone presses save in an app
+     that also autosaves — had nothing to press. The confirmation is worth two
+     seconds; after that the useful thing is a button that says what it does. */
+  const [justSaved, setJustSaved] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const confirmSaved = () => {
+    setJustSaved(true);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setJustSaved(false), 2000);
+  };
   const [saveError, setSaveError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -295,7 +306,13 @@ export default function Editor({
     return save(property, guide);
   }, [save, property, guide]);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+    },
+    [],
+  );
 
   /* The step the editor opens on counts as visited too. */
   useEffect(() => {
@@ -1446,11 +1463,14 @@ export default function Editor({
                 reassurance that makes the autosave believable. */}
             <button
               type="button"
-              onClick={() => void saveNow()}
+              onClick={async () => {
+                await saveNow();
+                confirmSaved();
+              }}
               disabled={saveState === "saving"}
               className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ring-1 ring-brand-line disabled:opacity-40"
             >
-              {saveState === "saving" ? "Guardando…" : saveState === "saved" ? "Guardado" : "Guardar"}
+              {saveState === "saving" ? "Guardando…" : justSaved ? "Guardado" : "Guardar"}
             </button>
 
             <button
